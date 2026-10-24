@@ -6,20 +6,20 @@ import {
 import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
 import { supabase } from './supabase';
 
-const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v5';
+const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v6';
 const USER_ID_KEY = 'cogniwake_user_uid_v1';
 const CUSTOM_AUDIO_KEY = 'cogniwake_custom_audio_cache_v1';
-const VOICE_PHRASES = [
-  'I am wide awake and ready to conquer the day',
-  'Rise and shine, no more sleep today',
-  'No excuses, time to achieve my goals',
-  'The sun is up and so am I',
-  'Today is a brand new opportunity'
+
+const WAKE_PHRASES = [
+  "i am wide awake and ready to conquer the day",
+  "rise and shine no more sleep today",
+  "no excuses time to achieve my goals",
+  "the sun is up and so am i",
+  "today is a brand new opportunity"
 ];
 
 // Full 22 Sounds Library
 const DEFAULT_SOUNDS = [
-  // --- Folder MP3 Prank & Meme Sounds ---
   { id: 'america', name: '🎙️ America Kya Kehta Tha', type: 'audio', src: '/sounds/America Kya Kehta Tha.mp3', category: 'prank' },
   { id: 'baby_crying', name: '👶 Baby Crying Tears', type: 'audio', src: '/sounds/Baby Crying Tears.mp3', category: 'prank' },
   { id: 'chicken_screaming', name: '🐔 Chicken Screaming', type: 'audio', src: '/sounds/Chicken On Tree Screaming.mp3', category: 'prank' },
@@ -33,14 +33,12 @@ const DEFAULT_SOUNDS = [
   { id: 'modi_kids', name: '🧒 MODI MODI Kids', type: 'audio', src: '/sounds/MODI MODI, MODI MODI Kids.mp3', category: 'prank' },
   { id: 'sad_bgm', name: '🎻 Sad Music BGM India', type: 'audio', src: '/sounds/Sad Music BGM India Ver.mp3', category: 'prank' },
 
-  // --- 5 Standard Ringtones ---
   { id: 'melodian', name: '🎵 Melodian (Default)', type: 'synth', category: 'default' },
   { id: 'bells', name: '🔔 Gentle Morning Bells', type: 'synth', category: 'default' },
   { id: 'cyber', name: '⚡ Cyber Synth Pulse', type: 'synth', category: 'default' },
   { id: 'digital', name: '⏰ Classic Digital Beep', type: 'synth', category: 'default' },
   { id: 'siren', name: '🚨 Siren Alert Extreme', type: 'synth', category: 'default' },
 
-  // --- 5 Soft & Relaxing Sounds ---
   { id: 'zen_garden', name: '🌿 Tibetan Zen Bowl', type: 'synth', category: 'relaxing' },
   { id: 'gentle_harp', name: '🎶 Soft Ambient Harp', type: 'synth', category: 'relaxing' },
   { id: 'ocean_breeze', name: '🌊 Ocean Calming Wave', type: 'synth', category: 'relaxing' },
@@ -55,14 +53,13 @@ export default function App() {
   const [alarmEnabled, setAlarmEnabled] = useState(true);
   const [volume, setVolume] = useState(75);
 
-  // Strict 1-Minute Snooze Control
   const [strictSnoozeEnabled, setStrictSnoozeEnabled] = useState(false);
+  const [snoozeCountdown, setSnoozeCountdown] = useState(null);
+  const snoozeTimerRef = useRef(null);
 
-  // Wake-Up Note Feature
   const [alarmNote, setAlarmNote] = useState('Gym & Morning Workout!');
   const [activeRingingNote, setActiveRingingNote] = useState('');
 
-  // Modular Verification Missions
   const [enabledMissions, setEnabledMissions] = useState({
     math: true,
     eyes: true,
@@ -70,7 +67,6 @@ export default function App() {
   });
   const [isMissionConfigOpen, setIsMissionConfigOpen] = useState(false);
 
-  // Sound Engine States
   const [selectedSound, setSelectedSound] = useState('chicken_screaming');
   const [customAudioData, setCustomAudioData] = useState(null);
   const [isSoundSelectorOpen, setIsSoundSelectorOpen] = useState(false);
@@ -92,7 +88,6 @@ export default function App() {
   const [isRinging, setIsRinging] = useState(false);
   const [ringingAlarmInfo, setRingingAlarmInfo] = useState('');
 
-  // Active Mission Step Pipeline & Index Ref for Synchronous Safety
   const [activePipeline, setActivePipeline] = useState([]);
   const [pipelineIndex, setPipelineIndex] = useState(0);
   const activePipelineRef = useRef([]);
@@ -103,9 +98,9 @@ export default function App() {
   const [userAnswer, setUserAnswer] = useState('');
   const [mathError, setMathError] = useState(false);
 
-  // Step 2: Strict Both Eyes Tracking
+  // Step 2: Eyes Tracking
   const videoRef = useRef(null);
-  const cameraStreamRef = useRef(null);
+  const [cameraStream, setCameraStream] = useState(null);
   const landmarkerRef = useRef(null);
   const [modelReady, setModelReady] = useState(false);
   const [eyesOpenStatus, setEyesOpenStatus] = useState('Initializing AI...');
@@ -113,8 +108,8 @@ export default function App() {
   const animFrameIdRef = useRef(null);
   const eyesOpenDurationRef = useRef(0);
 
-  // Step 3: Voice States & Decibel Meter
-  const [currentVoicePhrase, setCurrentVoicePhrase] = useState('');
+  // Step 3: Strict Voice Matching
+  const [targetVoicePhrase, setTargetVoicePhrase] = useState(WAKE_PHRASES[0]);
   const [transcript, setTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [voiceVolumeLevel, setVoiceVolumeLevel] = useState(0);
@@ -138,7 +133,7 @@ export default function App() {
   const userIdRef = useRef(null);
   const saveTimeoutRef = useRef(null);
 
-  // Keep screen awake
+  // Wake Lock API
   useEffect(() => {
     let wakeLock = null;
     const requestWakeLock = async () => {
@@ -154,13 +149,13 @@ export default function App() {
     };
   }, []);
 
-  // Load Custom Audio Cache
+  // Custom audio cache
   useEffect(() => {
     const cached = localStorage.getItem(CUSTOM_AUDIO_KEY);
     if (cached) setCustomAudioData(cached);
   }, []);
 
-  // Initialize MediaPipe AI Model (CPU Mode ensures zero GPU fallback crashes)
+  // MediaPipe FaceLandmarker Init (CPU Delegate)
   useEffect(() => {
     let isMounted = true;
     async function initMediaPipe() {
@@ -189,7 +184,7 @@ export default function App() {
     return () => { isMounted = false; };
   }, []);
 
-  // Sync Supabase & LocalStorage
+  // Load from Supabase
   useEffect(() => {
     let uid = localStorage.getItem(USER_ID_KEY);
     if (!uid) {
@@ -240,7 +235,7 @@ export default function App() {
     loadUserData();
   }, []);
 
-  // Debounced Supabase & LocalStorage Save
+  // Save to Supabase
   useEffect(() => {
     if (!isLoaded || !userIdRef.current) return;
 
@@ -277,7 +272,6 @@ export default function App() {
     };
   }, [bedAngle, wakeAngle, alarmEnabled, volume, alarms, alarmNote, enabledMissions, strictSnoozeEnabled, isLoaded]);
 
-  // Volume Controller
   const handleVolumeChange = (newVal) => {
     const val = Number(newVal);
     setVolume(val);
@@ -393,7 +387,6 @@ export default function App() {
     const soundToPlay = forcedSoundId || selectedSound;
     const volRatio = Math.max(0, Math.min(1, volume / 100));
 
-    // Custom Uploaded MP3 Audio
     if (soundToPlay === 'custom' && customAudioData) {
       const audio = new Audio(customAudioData);
       audio.loop = true;
@@ -403,7 +396,6 @@ export default function App() {
       return;
     }
 
-    // Folder MP3 File
     const matched = DEFAULT_SOUNDS.find((s) => s.id === soundToPlay);
     if (matched && matched.type === 'audio') {
       const audio = new Audio(matched.src);
@@ -414,7 +406,6 @@ export default function App() {
       return;
     }
 
-    // Web Audio Synthesizer
     ensureAudioContext();
     playSynthPattern(soundToPlay);
     soundIntervalRef.current = setInterval(() => playSynthPattern(soundToPlay), 1800);
@@ -491,15 +482,15 @@ export default function App() {
     setMathError(false);
   }, []);
 
-  // STEP 2: EYE TRACKING CAMERA SHUTDOWN
+  // STEP 2: EYE TRACKING
   const stopCamera = () => {
     if (animFrameIdRef.current) {
       cancelAnimationFrame(animFrameIdRef.current);
       animFrameIdRef.current = null;
     }
-    if (cameraStreamRef.current) {
-      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
-      cameraStreamRef.current = null;
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
     }
   };
 
@@ -539,13 +530,9 @@ export default function App() {
                 setOpenEyesProgress(progress);
 
                 if (progress >= 100) {
-                  if (animFrameIdRef.current) {
-                    cancelAnimationFrame(animFrameIdRef.current);
-                    animFrameIdRef.current = null;
-                  }
                   stopCamera();
                   setEyesOpenStatus('Verified! Well done.');
-                  advancePipeline();
+                  setTimeout(() => advancePipeline(), 250);
                   return;
                 }
               } else {
@@ -574,7 +561,7 @@ export default function App() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } }
       });
-      cameraStreamRef.current = stream;
+      setCameraStream(stream);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -590,7 +577,7 @@ export default function App() {
     }
   }, [modelReady]);
 
-  // STEP 3: LIVE VOICE / DECIBEL ENGINE
+  // STEP 3: STRICT VOICE MATCHING
   const stopMicrophoneEngine = () => {
     manualStopRef.current = true;
     setIsListening(false);
@@ -617,7 +604,6 @@ export default function App() {
     manualStopRef.current = false;
     setIsListening(true);
 
-    // Alarm melody loop pause taaki mic clear sun sake
     stopMelodyLoop();
 
     try {
@@ -634,7 +620,6 @@ export default function App() {
       source.connect(analyser);
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      let voiceHits = 0;
 
       const analyzeAudio = () => {
         if (manualStopRef.current) return;
@@ -643,20 +628,7 @@ export default function App() {
         let sum = 0;
         for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
         const average = sum / dataArray.length;
-        const volumeLevel = Math.min(100, Math.round((average / 128) * 100));
-        setVoiceVolumeLevel(volumeLevel);
-
-        if (volumeLevel > 30) {
-          voiceHits += 1;
-          setTranscript('Loud Voice Detected!');
-          if (voiceHits >= 4) {
-            manualStopRef.current = true;
-            setTimeout(() => advancePipeline(), 250);
-            return;
-          }
-        } else {
-          voiceHits = Math.max(0, voiceHits - 1);
-        }
+        setVoiceVolumeLevel(Math.min(100, Math.round((average / 128) * 100)));
 
         micAnimRef.current = requestAnimationFrame(analyzeAudio);
       };
@@ -678,60 +650,73 @@ export default function App() {
         recognition.interimResults = true;
 
         recognition.onresult = (event) => {
-          if (manualStopRef.current) return;
-
           let heard = '';
-          for (let i = 0; i < event.results.length; ++i) {
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
             heard += event.results[i][0].transcript;
           }
-          heard = heard.toLowerCase().trim();
+          heard = heard.toLowerCase().replace(/[.,!?-]/g, '').trim();
           setTranscript(heard);
 
-          const normalizedHeard = heard.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
-          const normalizedPhrase = currentVoicePhrase.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
-          if (normalizedPhrase && normalizedHeard.includes(normalizedPhrase)) {
+          // STRICT ACCURACY CHECK: Kam se kam 70% matching words hone chahiye
+          const targetClean = targetVoicePhrase.toLowerCase().replace(/[.,!?-]/g, '').trim();
+          const targetWords = targetClean.split(/\s+/);
+          const heardWords = heard.split(/\s+/);
+
+          const matchedWordsCount = targetWords.filter(w => heardWords.includes(w)).length;
+          const matchRatio = matchedWordsCount / targetWords.length;
+
+          if (matchRatio >= 0.7 || heard.includes(targetClean)) {
             manualStopRef.current = true;
             advancePipeline();
           }
         };
 
+        recognition.onerror = (e) => {
+          console.warn("Speech error:", e);
+        };
+
         recognition.start();
       } catch (err) {}
+    } else {
+      setVoiceError('Speech Recognition is not supported on this browser.');
     }
   };
 
-  // Safe Step Launcher
   const startStep = (stepName) => {
     if (stepName === 'math') {
       generateMathMission();
     } else if (stepName === 'eyes') {
       startEyeDetection();
     } else if (stepName === 'voice') {
-      const phraseIndex = Math.floor(Math.random() * VOICE_PHRASES.length);
-      setCurrentVoicePhrase(VOICE_PHRASES[phraseIndex]);
-      setVoiceError('');
-      setTranscript('');
+      const randomPhrase = WAKE_PHRASES[Math.floor(Math.random() * WAKE_PHRASES.length)];
+      setTargetVoicePhrase(randomPhrase);
     }
   };
 
-  // Safe Multi-Step Pipeline Advance (Prevents skipping Voice step)
-  function advancePipeline() {
+  const advancePipeline = () => {
     stopCamera();
     stopMicrophoneEngine();
 
     const currentPipe = activePipelineRef.current;
     const nextIdx = pipelineIndexRef.current + 1;
-    pipelineIndexRef.current = nextIdx;
 
     if (nextIdx < currentPipe.length) {
+      pipelineIndexRef.current = nextIdx;
       setPipelineIndex(nextIdx);
-      startStep(currentPipe[nextIdx]);
+      const nextStep = currentPipe[nextIdx];
+      setTimeout(() => startStep(nextStep), 200);
     } else {
       finalizeAlarmDismissal();
     }
-  }
+  };
 
   const triggerAlarmRing = (info, note = '') => {
+    if (snoozeTimerRef.current) {
+      clearTimeout(snoozeTimerRef.current);
+      snoozeTimerRef.current = null;
+      setSnoozeCountdown(null);
+    }
+
     setRingingAlarmInfo(info);
     setActiveRingingNote(note || alarmNote);
 
@@ -759,13 +744,29 @@ export default function App() {
     }
   };
 
-  // Strict 1-Minute Snooze Handler
+  // STRICT 1-MINUTE REAL COUNTDOWN SNOOZE
   const handleStrictSnooze = () => {
     stopMelodyLoop();
     stopCamera();
     stopMicrophoneEngine();
     setIsRinging(false);
-    setWakeAngle((prev) => (prev + 0.5) % 360);
+
+    let remainingSeconds = 60;
+    setSnoozeCountdown(remainingSeconds);
+
+    if (snoozeTimerRef.current) clearInterval(snoozeTimerRef.current);
+
+    snoozeTimerRef.current = setInterval(() => {
+      remainingSeconds -= 1;
+      setSnoozeCountdown(remainingSeconds);
+
+      if (remainingSeconds <= 0) {
+        clearInterval(snoozeTimerRef.current);
+        snoozeTimerRef.current = null;
+        setSnoozeCountdown(null);
+        triggerAlarmRing('Snooze Over (1 Min Ended)', activeRingingNote || alarmNote);
+      }
+    }, 1000);
   };
 
   const finalizeAlarmDismissal = () => {
@@ -781,6 +782,11 @@ export default function App() {
     setTranscript('');
     setOpenEyesProgress(0);
     setVoiceVolumeLevel(0);
+    if (snoozeTimerRef.current) {
+      clearInterval(snoozeTimerRef.current);
+      snoozeTimerRef.current = null;
+      setSnoozeCountdown(null);
+    }
   };
 
   // Clock Angle Math
@@ -841,7 +847,7 @@ export default function App() {
     setNewAlarmCustomNote('');
   };
 
-  // Real-time Clock Monitor (Triggers exact alarms)
+  // Clock Monitor
   useEffect(() => {
     const checkAlarmTime = () => {
       if (isRinging) return;
@@ -902,7 +908,9 @@ export default function App() {
     };
   }, [activeHandle, handleMove]);
 
+  // EXACT ALIGNMENT MATH: Radius 94 on 210x210 Viewport
   const radius = 94;
+  const centerCoord = 105;
   const circumference = 2 * Math.PI * radius;
   let arcSpanDeg = wakeAngle - bedAngle;
   if (arcSpanDeg < 0) arcSpanDeg += 360;
@@ -911,8 +919,8 @@ export default function App() {
   const getPinPos = (angleDeg) => {
     const rad = (angleDeg - 90) * (Math.PI / 180);
     return {
-      x: 105 + radius * Math.cos(rad),
-      y: 105 + radius * Math.sin(rad)
+      x: centerCoord + radius * Math.cos(rad),
+      y: centerCoord + radius * Math.sin(rad)
     };
   };
 
@@ -930,20 +938,41 @@ export default function App() {
 
   return (
     <div style={{
-      minHeight: '100vh',
-      width: '100%',
-      background: 'radial-gradient(circle at 20% 20%, #fbc2eb 0%, #d5b3e6 45%, #e8a7ea 100%)',
+      minHeight: '100dvh',
+      width: '100vw',
+      backgroundColor: '#120324',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '16px 8px',
+      margin: 0,
+      padding: 0,
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       boxSizing: 'border-box',
       userSelect: 'none',
-      position: 'relative'
+      overflowX: 'hidden'
     }}>
 
-      {/* ==================== ACTIVE ALARM RINGING SCREEN WITH LIVE NOTE ==================== */}
+      {/* SNOOZE ACTIVE TOP BANNER */}
+      {snoozeCountdown !== null && (
+        <div style={{
+          position: 'fixed',
+          top: '12px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: '#ff1b90',
+          color: '#fff',
+          padding: '6px 16px',
+          borderRadius: '20px',
+          fontSize: '12px',
+          fontWeight: 800,
+          zIndex: 150,
+          boxShadow: '0 0 15px rgba(255, 27, 144, 0.8)'
+        }}>
+          ⏰ Snooze Ending In: {snoozeCountdown}s
+        </div>
+      )}
+
+      {/* ==================== ACTIVE ALARM RINGING SCREEN ==================== */}
       {isRinging && (
         <div style={{
           position: 'fixed',
@@ -958,7 +987,7 @@ export default function App() {
         }}>
           <div style={{
             width: '100%',
-            maxWidth: '350px',
+            maxWidth: '360px',
             backgroundColor: '#1b0633',
             border: '2px solid #ff1b90',
             borderRadius: '32px',
@@ -971,7 +1000,6 @@ export default function App() {
             color: '#fff',
             position: 'relative'
           }}>
-            {/* Step Indicators */}
             {activePipeline.length > 0 && (
               <div style={{ display: 'flex', gap: '8px', width: '100%', justifyContent: 'center', marginBottom: '12px' }}>
                 {activePipeline.map((step, idx) => (
@@ -988,7 +1016,6 @@ export default function App() {
               </div>
             )}
 
-            {/* WAKE-UP NOTE BANNER (FRONT AND CENTER) */}
             {activeRingingNote && (
               <div style={{
                 width: '100%',
@@ -1155,24 +1182,24 @@ export default function App() {
               </div>
             )}
 
-            {/* STEP: VOICE */}
+            {/* STEP: STRICT VOICE PHRASE */}
             {currentActiveStepName === 'voice' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
-                <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>Speak To Stop!</h3>
+                <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>Speak Exact Phrase!</h3>
                 <p style={{ fontSize: '11px', color: '#c7a9e9', margin: 0 }}>
-                  Tap mic (sound pauses) and speak clearly:
+                  Tap mic and speak this complete sentence:
                 </p>
 
                 <div style={{
                   backgroundColor: '#270e44',
                   border: '2px dashed #ff1b90',
                   borderRadius: '16px',
-                  padding: '10px 12px',
+                  padding: '12px 14px',
                   width: '100%',
                   boxSizing: 'border-box'
                 }}>
-                  <span style={{ fontSize: '14px', fontWeight: 800, color: '#ffd0eb', fontStyle: 'italic' }}>
-                    "{currentVoicePhrase}"
+                  <span style={{ fontSize: '14px', fontWeight: 800, color: '#ffd0eb', fontStyle: 'italic', lineHeight: 1.4 }}>
+                    "{targetVoicePhrase}"
                   </span>
                 </div>
 
@@ -1195,7 +1222,7 @@ export default function App() {
 
                 {transcript && (
                   <div style={{ fontSize: '12px', color: '#c7a9e9' }}>
-                    Status: <strong style={{ color: '#fff' }}>"{transcript}"</strong>
+                    Heard: <strong style={{ color: '#fff' }}>"{transcript}"</strong>
                   </div>
                 )}
 
@@ -1222,7 +1249,7 @@ export default function App() {
                     boxShadow: isListening ? '0 0 20px #f59e0b' : '0 8px 20px rgba(255,26,140,0.4)'
                   }}
                 >
-                  <Mic size={18} /> {isListening ? 'Sound Paused... Speak!' : 'Tap Mic & Speak Phrase'}
+                  <Mic size={18} /> {isListening ? 'Listening... Speak Now!' : 'Tap Mic & Read Phrase'}
                 </button>
               </div>
             )}
@@ -1249,7 +1276,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Strict 1-Minute Snooze */}
             {strictSnoozeEnabled && (
               <button
                 type="button"
@@ -1680,30 +1706,23 @@ export default function App() {
         </div>
       )}
 
-      {/* ==================== SINGLE APP FRAME ==================== */}
+      {/* ==================== EDGE-TO-EDGE RESPONSIVE CONTAINER ==================== */}
       <div style={{
         width: '100%',
-        maxWidth: '350px',
-        height: '710px',
+        maxWidth: '430px',
+        minHeight: '100dvh',
         backgroundColor: '#120324',
-        borderRadius: '44px',
-        padding: '24px 20px 16px 20px',
+        padding: '24px 20px 20px 20px',
         color: '#ffffff',
-        boxShadow: '0 30px 70px rgba(22, 2, 45, 0.65), 0 0 0 1px rgba(255,255,255,0.08) inset',
-        border: '4px solid #2d0e52',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
         position: 'relative',
-        overflow: 'hidden',
         boxSizing: 'border-box'
       }}>
-        <div style={{ position: 'absolute', top: '-60px', left: '-60px', width: '200px', height: '200px', borderRadius: '50%', background: 'rgba(233, 30, 99, 0.25)', filter: 'blur(50px)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', bottom: '120px', right: '-60px', width: '180px', height: '180px', borderRadius: '50%', background: 'rgba(168, 20, 115, 0.25)', filter: 'blur(50px)', pointerEvents: 'none' }} />
-
         {/* TAB 1: SLEEP TIME */}
         {activeTab === 'sleep' && (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', position: 'relative', zIndex: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', flex: 1, position: 'relative', zIndex: 2 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: '3px', opacity: 0.75 }}>
                 <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
@@ -1711,22 +1730,22 @@ export default function App() {
                 <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 700, letterSpacing: '0.4px' }}>CogniWake</h2>
+                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, letterSpacing: '0.4px' }}>CogniWake</h2>
                 {syncStatus === 'saving' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#f59e0b' }} />}
                 {syncStatus === 'synced' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }} />}
               </div>
               <span
                 onClick={() => triggerAlarmRing('CogniWake Mission', alarmNote)}
-                style={{ fontSize: '12px', color: '#ff1b90', fontWeight: 700, cursor: 'pointer' }}
+                style={{ fontSize: '13px', color: '#ff1b90', fontWeight: 700, cursor: 'pointer' }}
               >
                 Test Ring
               </span>
             </div>
 
-            {/* Dial */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div ref={dialRef} style={{ position: 'relative', width: '190px', height: '190px', display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none' }}>
-                <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '12px solid #230a40', boxSizing: 'border-box' }} />
+            {/* Dial with Exact Center & Handle Math */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '14px', marginBottom: '14px' }}>
+              <div ref={dialRef} style={{ position: 'relative', width: '210px', height: '210px', display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none' }}>
+                <div style={{ position: 'absolute', inset: '11px', borderRadius: '50%', border: '12px solid #230a40', boxSizing: 'border-box' }} />
 
                 <svg 
                   style={{ 
@@ -1735,7 +1754,7 @@ export default function App() {
                     width: '100%', 
                     height: '100%', 
                     transform: `rotate(${bedAngle - 90}deg)`, 
-                    transformOrigin: '50% 50%',
+                    transformOrigin: '105px 105px',
                     pointerEvents: 'none' 
                   }} 
                   viewBox="0 0 210 210"
@@ -1786,16 +1805,17 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Bed Handle */}
                 <div
                   onMouseDown={() => setActiveHandle('bed')}
                   onTouchStart={() => setActiveHandle('bed')}
                   style={{
                     position: 'absolute',
-                    left: `${bedPos.x - 5}px`,
-                    top: `${bedPos.y - 5}px`,
+                    left: `${bedPos.x}px`,
+                    top: `${bedPos.y}px`,
                     transform: 'translate(-50%, -50%)',
-                    width: '26px',
-                    height: '26px',
+                    width: '24px',
+                    height: '24px',
                     borderRadius: '50%',
                     backgroundColor: '#ffffff',
                     border: '2px solid #ff1b90',
@@ -1810,13 +1830,14 @@ export default function App() {
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#120324' }} />
                 </div>
 
+                {/* Wake Handle (Accurately aligned without drift) */}
                 <div
                   onMouseDown={() => setActiveHandle('wake')}
                   onTouchStart={() => setActiveHandle('wake')}
                   style={{
                     position: 'absolute',
-                    left: `${wakePos.x - 5}px`,
-                    top: `${wakePos.y - 5}px`,
+                    left: `${wakePos.x}px`,
+                    top: `${wakePos.y}px`,
                     transform: 'translate(-50%, -50%)',
                     width: '24px',
                     height: '24px',
@@ -1836,48 +1857,47 @@ export default function App() {
               </div>
 
               {/* Bedtime & Wake Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%', marginTop: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', width: '100%', marginTop: '16px' }}>
                 <div style={{
                   position: 'relative',
                   background: 'linear-gradient(135deg, #ff1a8c 0%, #c40b68 100%)',
-                  padding: '10px 8px',
-                  borderRadius: '16px',
+                  padding: '12px 10px',
+                  borderRadius: '18px',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   boxShadow: '0 6px 20px rgba(255, 26, 140, 0.4)'
                 }}>
-                  <span style={{ fontSize: '9px', color: '#ffd0eb', fontWeight: 600 }}>BedTime</span>
-                  <span style={{ fontSize: '17px', fontWeight: 800 }}>{angleToTime(bedAngle)}</span>
+                  <span style={{ fontSize: '10px', color: '#ffd0eb', fontWeight: 600 }}>BedTime</span>
+                  <span style={{ fontSize: '18px', fontWeight: 800 }}>{angleToTime(bedAngle)}</span>
                 </div>
 
                 <div style={{
                   position: 'relative',
                   backgroundColor: '#1e0935',
                   border: '1px solid #37145b',
-                  padding: '10px 8px',
-                  borderRadius: '16px',
+                  padding: '12px 10px',
+                  borderRadius: '18px',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center'
                 }}>
-                  <span style={{ fontSize: '9px', color: '#8d72b2', fontWeight: 600 }}>Wake up</span>
-                  <span style={{ fontSize: '17px', fontWeight: 800, color: '#eeeeee' }}>{angleToTime(wakeAngle)}</span>
+                  <span style={{ fontSize: '10px', color: '#8d72b2', fontWeight: 600 }}>Wake up</span>
+                  <span style={{ fontSize: '18px', fontWeight: 800, color: '#eeeeee' }}>{angleToTime(wakeAngle)}</span>
                 </div>
               </div>
             </div>
 
-            {/* Controls (Clean Minimal Layout) */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {/* Controls */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: 'auto' }}>
               
-              {/* Missions Config Button */}
               <div 
                 onClick={() => setIsMissionConfigOpen(true)}
                 style={{
                   backgroundColor: '#200938',
                   border: '1px solid #3d1768',
                   borderRadius: '14px',
-                  padding: '8px 10px',
+                  padding: '10px 12px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -1885,24 +1905,23 @@ export default function App() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Flame size={14} color="#ff1b90" />
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: '#ffd0eb' }}>Missions Settings</span>
+                  <Flame size={15} color="#ff1b90" />
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#ffd0eb' }}>Missions Settings</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#a58ec4' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#a58ec4' }}>
                   <span>{buildPipeline().length} Active</span>
-                  <ChevronRight size={12} />
+                  <ChevronRight size={13} />
                 </div>
               </div>
 
-              {/* Set Alarm Switch */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: '#e0d5ed' }}>Set alarm</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#e0d5ed' }}>Set alarm</span>
                 <div
                   onClick={() => setAlarmEnabled(!alarmEnabled)}
                   style={{
-                    width: '40px',
-                    height: '22px',
-                    borderRadius: '11px',
+                    width: '42px',
+                    height: '24px',
+                    borderRadius: '12px',
                     backgroundColor: alarmEnabled ? '#ff1b90' : '#270e44',
                     boxShadow: alarmEnabled ? '0 0 10px rgba(255, 27, 144, 0.6)' : 'none',
                     display: 'flex',
@@ -1914,19 +1933,19 @@ export default function App() {
                     transition: 'all 0.2s'
                   }}
                 >
-                  <div style={{ width: '18px', height: '18px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
+                  <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
                 </div>
               </div>
 
-              {/* Sound & Live Volume */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '10.5px', color: '#8d72b2', fontWeight: 600 }}>
+              {/* Sound & Slider */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', color: '#8d72b2', fontWeight: 600 }}>
                   <div 
                     onClick={() => setIsSoundSelectorOpen(true)}
                     style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', color: '#ff79c6' }}
                   >
                     <span>Sound: <strong>{getSoundDisplayName()}</strong></span>
-                    <ChevronRight size={12} />
+                    <ChevronRight size={13} />
                   </div>
                   <button
                     onClick={handleTogglePreview}
@@ -1938,17 +1957,17 @@ export default function App() {
                       background: 'none',
                       border: 'none',
                       cursor: 'pointer',
-                      fontSize: '10.5px',
+                      fontSize: '11px',
                       fontWeight: 600,
                       padding: 0
                     }}
                   >
-                    {isPlayingPreview ? <Volume2 size={12} color="#ff1b90" /> : <VolumeX size={12} color="#8d72b2" />}
+                    {isPlayingPreview ? <Volume2 size={13} color="#ff1b90" /> : <VolumeX size={13} color="#8d72b2" />}
                     <span>{isPlayingPreview ? 'Stop' : 'Preview'}</span>
                   </button>
                 </div>
 
-                <div style={{ position: 'relative', width: '100%', height: '5px', backgroundColor: '#270e44', borderRadius: '3px', display: 'flex', alignItems: 'center' }}>
+                <div style={{ position: 'relative', width: '100%', height: '6px', backgroundColor: '#270e44', borderRadius: '3px', display: 'flex', alignItems: 'center' }}>
                   <div style={{ height: '100%', width: `${volume}%`, background: 'linear-gradient(90deg, #d81075, #ff1b90)', borderRadius: '3px' }} />
                   <input
                     type="range"
@@ -1962,8 +1981,8 @@ export default function App() {
                     position: 'absolute',
                     left: `${volume}%`,
                     transform: 'translateX(-50%)',
-                    width: '13px',
-                    height: '13px',
+                    width: '14px',
+                    height: '14px',
                     borderRadius: '50%',
                     backgroundColor: '#ff1b90',
                     border: '2px solid #ffffff',
@@ -1976,15 +1995,15 @@ export default function App() {
               {/* Strict 1-Minute Snooze */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#e0d5ed' }}>Strict Snooze</div>
-                  <div style={{ fontSize: '9px', color: '#8d72b2' }}>Only 1-min extra sleep</div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#e0d5ed' }}>Strict Snooze</div>
+                  <div style={{ fontSize: '10px', color: '#8d72b2' }}>Only 1-min extra sleep</div>
                 </div>
                 <div
                   onClick={() => setStrictSnoozeEnabled(!strictSnoozeEnabled)}
                   style={{
-                    width: '40px',
-                    height: '22px',
-                    borderRadius: '11px',
+                    width: '42px',
+                    height: '24px',
+                    borderRadius: '12px',
                     backgroundColor: strictSnoozeEnabled ? '#ff1b90' : '#270e44',
                     boxShadow: strictSnoozeEnabled ? '0 0 10px rgba(255, 27, 144, 0.6)' : 'none',
                     display: 'flex',
@@ -1996,7 +2015,7 @@ export default function App() {
                     transition: 'all 0.2s'
                   }}
                 >
-                  <div style={{ width: '18px', height: '18px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
+                  <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
                 </div>
               </div>
 
@@ -2004,24 +2023,24 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: ALARM LIST */}
+        {/* TAB 2: ALARMS LIST */}
         {activeTab === 'alarms' && (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', position: 'relative', zIndex: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', flex: 1, position: 'relative', zIndex: 2 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: '3px', opacity: 0.75 }}>
                 <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
                 <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
                 <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
               </div>
-              <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 700, letterSpacing: '0.4px' }}>Alarms</h2>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, letterSpacing: '0.4px' }}>Alarms</h2>
               <button
                 onClick={() => setIsAddModalOpen(true)}
                 style={{
                   background: 'rgba(255, 27, 144, 0.15)',
                   border: '1px solid rgba(255, 27, 144, 0.4)',
                   borderRadius: '50%',
-                  width: '26px',
-                  height: '26px',
+                  width: '28px',
+                  height: '28px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -2029,15 +2048,15 @@ export default function App() {
                   color: '#ff1b90'
                 }}
               >
-                <Plus size={15} />
+                <Plus size={16} />
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ position: 'relative', width: '110px', height: '110px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '20px 0' }}>
+              <div style={{ position: 'relative', width: '120px', height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div style={{
-                  width: '85px',
-                  height: '85px',
+                  width: '90px',
+                  height: '90px',
                   borderRadius: '50%',
                   background: 'linear-gradient(135deg, #fbcfe8 0%, #e879f9 50%, #c084fc 100%)',
                   boxShadow: '0 0 35px rgba(232, 121, 249, 0.65)',
@@ -2046,20 +2065,20 @@ export default function App() {
                 }}>
                   <div style={{ position: 'absolute', top: '16px', left: '20px', width: '18px', height: '18px', borderRadius: '50%', backgroundColor: 'rgba(217, 70, 239, 0.3)' }} />
                   <div style={{ position: 'absolute', bottom: '16px', right: '22px', width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(217, 70, 239, 0.25)' }} />
-                  <div style={{ position: 'absolute', top: '-15px', left: '-15px', width: '85px', height: '85px', borderRadius: '50%', backgroundColor: '#120324' }} />
+                  <div style={{ position: 'absolute', top: '-15px', left: '-15px', width: '90px', height: '90px', borderRadius: '50%', backgroundColor: '#120324' }} />
                 </div>
               </div>
 
-              <span style={{ fontSize: '11px', color: '#8d72b2', fontWeight: 600, marginTop: '2px' }}>Sleep time</span>
-              <div style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.5px', marginTop: '2px' }}>
-                {sleepDuration.hrs}<span style={{ fontSize: '14px', fontWeight: 700, color: '#bbb' }}>hr</span> {sleepDuration.mins}<span style={{ fontSize: '14px', fontWeight: 700, color: '#bbb' }}>min</span>
+              <span style={{ fontSize: '12px', color: '#8d72b2', fontWeight: 600, marginTop: '4px' }}>Sleep time</span>
+              <div style={{ fontSize: '26px', fontWeight: 900, letterSpacing: '-0.5px', marginTop: '2px' }}>
+                {sleepDuration.hrs}<span style={{ fontSize: '15px', fontWeight: 700, color: '#bbb' }}>hr</span> {sleepDuration.mins}<span style={{ fontSize: '15px', fontWeight: 700, color: '#bbb' }}>min</span>
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: '4px', paddingRight: '4px' }}>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: '#8d72b2' }}>Saved Alarms</span>
-                <span style={{ fontSize: '10px', color: '#ff1b90', fontWeight: 600, cursor: 'pointer' }} onClick={() => setIsAddModalOpen(true)}>+ Add</span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#8d72b2' }}>Saved Alarms</span>
+                <span style={{ fontSize: '11px', color: '#ff1b90', fontWeight: 600, cursor: 'pointer' }} onClick={() => setIsAddModalOpen(true)}>+ Add</span>
               </div>
 
               {alarms.map((alarm) => (
@@ -2069,29 +2088,29 @@ export default function App() {
                     backgroundColor: '#1e0935',
                     border: '1px solid #37145b',
                     borderRadius: '16px',
-                    padding: '8px 12px',
+                    padding: '10px 14px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between'
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: '16px', fontWeight: 900, color: alarm.active ? '#ffffff' : '#73618a' }}>{alarm.time}</div>
-                    <div style={{ fontSize: '9px', color: '#ff79c6', fontWeight: 700 }}>{alarm.note || alarm.label}</div>
+                    <div style={{ fontSize: '17px', fontWeight: 900, color: alarm.active ? '#ffffff' : '#73618a' }}>{alarm.time}</div>
+                    <div style={{ fontSize: '10px', color: '#ff79c6', fontWeight: 700 }}>{alarm.note || alarm.label}</div>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {!alarm.isDialSync && (
                       <button onClick={() => deleteAlarm(alarm.id)} style={{ background: 'none', border: 'none', color: '#654f7a', cursor: 'pointer' }}>
-                        <Trash2 size={13} />
+                        <Trash2 size={14} />
                       </button>
                     )}
                     <div
                       onClick={() => toggleAlarm(alarm.id)}
                       style={{
-                        width: '38px',
-                        height: '20px',
-                        borderRadius: '10px',
+                        width: '40px',
+                        height: '22px',
+                        borderRadius: '11px',
                         backgroundColor: alarm.active ? '#ff1b90' : '#140428',
                         display: 'flex',
                         alignItems: 'center',
@@ -2101,7 +2120,7 @@ export default function App() {
                         justifyContent: alarm.active ? 'flex-end' : 'flex-start'
                       }}
                     >
-                      <div style={{ width: '16px', height: '16px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
+                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
                     </div>
                   </div>
                 </div>
@@ -2115,9 +2134,9 @@ export default function App() {
           display: 'flex',
           justifyContent: 'space-around',
           alignItems: 'center',
-          paddingTop: '10px',
+          paddingTop: '12px',
           borderTop: '1px solid #2b124a',
-          marginTop: '6px',
+          marginTop: '12px',
           position: 'relative',
           zIndex: 5
         }}>
@@ -2134,8 +2153,8 @@ export default function App() {
               cursor: 'pointer'
             }}
           >
-            <Moon size={17} />
-            <span style={{ fontSize: '10px', fontWeight: 700 }}>Sleep</span>
+            <Moon size={18} />
+            <span style={{ fontSize: '11px', fontWeight: 700 }}>Sleep</span>
           </button>
           
           <button
@@ -2151,8 +2170,8 @@ export default function App() {
               cursor: 'pointer'
             }}
           >
-            <Bell size={17} />
-            <span style={{ fontSize: '10px', fontWeight: 700 }}>Alarms</span>
+            <Bell size={18} />
+            <span style={{ fontSize: '11px', fontWeight: 700 }}>Alarms</span>
           </button>
         </div>
 
