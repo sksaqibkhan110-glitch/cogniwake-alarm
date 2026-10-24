@@ -6,7 +6,7 @@ import {
 import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
 import { supabase } from './supabase';
 
-const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v3';
+const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v4';
 const USER_ID_KEY = 'cogniwake_user_uid_v1';
 const CUSTOM_AUDIO_KEY = 'cogniwake_custom_audio_cache_v1';
 
@@ -51,11 +51,11 @@ export default function App() {
   // Strict 1-Minute Snooze Control
   const [strictSnoozeEnabled, setStrictSnoozeEnabled] = useState(false);
 
-  // Wake-Up Note Feature
+  // Wake-Up Note Feature (Stored & Triggered per Alarm)
   const [alarmNote, setAlarmNote] = useState('Gym & Morning Workout!');
   const [activeRingingNote, setActiveRingingNote] = useState('');
 
-  // Modular Verification Missions (User chooses which to activate)
+  // Modular Verification Missions
   const [enabledMissions, setEnabledMissions] = useState({
     math: true,
     eyes: true,
@@ -73,7 +73,7 @@ export default function App() {
 
   const [alarms, setAlarms] = useState([
     { id: 1, time: '05.30', label: 'Sat, Sun', note: 'Morning Jogging', active: true, isDialSync: true },
-    { id: 2, time: '07.00', label: 'Weekdays', note: 'College / Work Day', active: true, isDialSync: false },
+    { id: 2, time: '07.00', label: 'Weekdays', note: 'College & Work Day', active: true, isDialSync: false },
   ]);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -97,8 +97,9 @@ export default function App() {
   // Step 2: Strict Both Eyes Tracking
   const videoRef = useRef(null);
   const [cameraStream, setCameraStream] = useState(null);
-  const [faceLandmarker, setFaceLandmarker] = useState(null);
-  const [eyesOpenStatus, setEyesOpenStatus] = useState('Initializing Scanner...');
+  const landmarkerRef = useRef(null);
+  const [modelReady, setModelReady] = useState(false);
+  const [eyesOpenStatus, setEyesOpenStatus] = useState('Initializing AI...');
   const [openEyesProgress, setOpenEyesProgress] = useState(0);
   const animFrameIdRef = useRef(null);
   const eyesOpenDurationRef = useRef(0);
@@ -128,7 +129,7 @@ export default function App() {
   const userIdRef = useRef(null);
   const saveTimeoutRef = useRef(null);
 
-  // Request Screen Wake Lock (Keeps screen awake)
+  // Screen Wake Lock API
   useEffect(() => {
     let wakeLock = null;
     const requestWakeLock = async () => {
@@ -150,28 +151,33 @@ export default function App() {
     if (cached) setCustomAudioData(cached);
   }, []);
 
-  // Initialize MediaPipe AI Model
+  // Initialize MediaPipe FaceLandmarker with CPU Safe Fallback
   useEffect(() => {
+    let isMounted = true;
     async function initMediaPipe() {
       try {
         const filesetResolver = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
         );
         const landmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
           baseOptions: {
             modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-            delegate: "GPU"
+            delegate: "CPU"
           },
           outputFaceBlendshapes: true,
           runningMode: "VIDEO",
           numFaces: 1
         });
-        setFaceLandmarker(landmarker);
+        if (isMounted) {
+          landmarkerRef.current = landmarker;
+          setModelReady(true);
+        }
       } catch (e) {
-        console.warn("MediaPipe model loading warning", e);
+        console.warn("MediaPipe model loading warning:", e);
       }
     }
     initMediaPipe();
+    return () => { isMounted = false; };
   }, []);
 
   // Load User Data from Supabase / LocalStorage
@@ -225,7 +231,7 @@ export default function App() {
     loadUserData();
   }, []);
 
-  // Debounced Supabase + LocalStorage Save
+  // Debounced Supabase & LocalStorage Save
   useEffect(() => {
     if (!isLoaded || !userIdRef.current) return;
 
@@ -419,7 +425,6 @@ export default function App() {
     }
   };
 
-  // Instant Sound Switch
   const handleSelectSound = (soundId) => {
     setSelectedSound(soundId);
     setIsSoundSelectorOpen(false);
@@ -454,7 +459,6 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  // Build Active Mission Pipeline
   const buildPipeline = () => {
     const pipe = [];
     if (enabledMissions.math) pipe.push('math');
@@ -463,7 +467,7 @@ export default function App() {
     return pipe;
   };
 
-  // Generate Math Problem
+  // STEP 1: MATH MISSION
   const generateMathMission = useCallback(() => {
     const isAddition = Math.random() > 0.5;
     const n1 = Math.floor(Math.random() * 40) + 12;
@@ -478,73 +482,68 @@ export default function App() {
     setMathError(false);
   }, []);
 
-  // STEP: Eye Tracking
-  const startEyeDetection = useCallback(async () => {
-    eyesOpenDurationRef.current = 0;
-    setOpenEyesProgress(0);
-    setEyesOpenStatus('Starting Camera...');
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: 320, height: 240 }
-      });
-      setCameraStream(stream);
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play();
-          runDetectionLoop();
-        };
-      }
-    } catch (e) {
-      setEyesOpenStatus('Camera permission blocked!');
+  // STEP 2: ROBUST EYE TRACKING WITH REAL-TIME FRAMES LOOP
+  const stopCamera = () => {
+    if (animFrameIdRef.current) {
+      cancelAnimationFrame(animFrameIdRef.current);
+      animFrameIdRef.current = null;
     }
-  }, [faceLandmarker]);
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
+    }
+  };
 
   const runDetectionLoop = () => {
-    if (!videoRef.current || !faceLandmarker) return;
+    let lastVideoTime = -1;
 
     const detect = () => {
-      if (videoRef.current && videoRef.current.readyState >= 2) {
-        const results = faceLandmarker.detectForVideo(videoRef.current, performance.now());
+      const video = videoRef.current;
+      if (video && video.readyState >= 2) {
+        if (landmarkerRef.current) {
+          if (video.currentTime !== lastVideoTime) {
+            lastVideoTime = video.currentTime;
+            try {
+              const results = landmarkerRef.current.detectForVideo(video, performance.now());
 
-        if (results.faceBlendshapes && results.faceBlendshapes.length > 0) {
-          const categories = results.faceBlendshapes[0].categories;
-          const blinkLeft = categories.find((c) => c.categoryName === 'eyeBlinkLeft')?.score || 0;
-          const blinkRight = categories.find((c) => c.categoryName === 'eyeBlinkRight')?.score || 0;
+              if (results.faceBlendshapes && results.faceBlendshapes.length > 0) {
+                const categories = results.faceBlendshapes[0].categories;
+                const blinkLeft = categories.find((c) => c.categoryName === 'eyeBlinkLeft')?.score || 0;
+                const blinkRight = categories.find((c) => c.categoryName === 'eyeBlinkRight')?.score || 0;
 
-          const isLeftOpen = blinkLeft < 0.28;
-          const isRightOpen = blinkRight < 0.28;
+                const isLeftOpen = blinkLeft < 0.38;
+                const isRightOpen = blinkRight < 0.38;
 
-          if (isLeftOpen && isRightOpen) {
-            eyesOpenDurationRef.current += 1;
-            setEyesOpenStatus('Both Eyes Open! Hold steady...');
-          } else {
-            eyesOpenDurationRef.current = Math.max(0, eyesOpenDurationRef.current - 3);
-            if (!isLeftOpen && !isRightOpen) {
-              setEyesOpenStatus('Eyes Closed! Wake up!');
-            } else if (!isLeftOpen) {
-              setEyesOpenStatus('Left Eye Closed! Open BOTH!');
-            } else {
-              setEyesOpenStatus('Right Eye Closed! Open BOTH!');
+                if (isLeftOpen && isRightOpen) {
+                  eyesOpenDurationRef.current += 1.8;
+                  setEyesOpenStatus('Both Eyes Open! Keep looking...');
+                } else {
+                  eyesOpenDurationRef.current = Math.max(0, eyesOpenDurationRef.current - 1.5);
+                  if (!isLeftOpen && !isRightOpen) {
+                    setEyesOpenStatus('Eyes Closed! Open both!');
+                  } else {
+                    setEyesOpenStatus('Open BOTH Eyes completely!');
+                  }
+                }
+
+                const progress = Math.min(100, Math.round((eyesOpenDurationRef.current / 30) * 100));
+                setOpenEyesProgress(progress);
+
+                if (progress >= 100) {
+                  stopCamera();
+                  setEyesOpenStatus('Verified! Well done.');
+                  setTimeout(() => advancePipeline(), 350);
+                  return;
+                }
+              } else {
+                setEyesOpenStatus('Face not centered. Face the camera!');
+              }
+            } catch (err) {
+              console.warn("Detection frame error:", err);
             }
           }
-
-          const progress = Math.min(100, Math.round((eyesOpenDurationRef.current / 45) * 100));
-          setOpenEyesProgress(progress);
-
-          if (progress >= 100) {
-            cancelAnimationFrame(animFrameIdRef.current);
-            stopCamera();
-            setEyesOpenStatus('Both Eyes Verified!');
-            setTimeout(() => advancePipeline(), 500);
-            return;
-          }
         } else {
-          setEyesOpenStatus('No face detected. Look directly at camera!');
-          eyesOpenDurationRef.current = Math.max(0, eyesOpenDurationRef.current - 1);
-          setOpenEyesProgress(Math.min(100, Math.round((eyesOpenDurationRef.current / 45) * 100)));
+          setEyesOpenStatus('Loading Face AI Model...');
         }
       }
       animFrameIdRef.current = requestAnimationFrame(detect);
@@ -553,15 +552,32 @@ export default function App() {
     animFrameIdRef.current = requestAnimationFrame(detect);
   };
 
-  const stopCamera = () => {
-    if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
-    if (cameraStream) {
-      cameraStream.getTracks().forEach((track) => track.stop());
-      setCameraStream(null);
-    }
-  };
+  const startEyeDetection = useCallback(async () => {
+    eyesOpenDurationRef.current = 0;
+    setOpenEyesProgress(0);
+    setEyesOpenStatus('Starting Camera...');
 
-  // STEP: Live Voice / Decibel Engine
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } }
+      });
+      setCameraStream(stream);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute('playsinline', 'true');
+        videoRef.current.muted = true;
+        await videoRef.current.play();
+        setEyesOpenStatus('Looking for eyes...');
+        runDetectionLoop();
+      }
+    } catch (e) {
+      console.warn("Camera failed:", e);
+      setEyesOpenStatus('Camera permission blocked!');
+    }
+  }, [modelReady]);
+
+  // STEP 3: LIVE VOICE / DECIBEL ENGINE
   const stopMicrophoneEngine = () => {
     manualStopRef.current = true;
     setIsListening(false);
@@ -588,6 +604,7 @@ export default function App() {
     manualStopRef.current = false;
     setIsListening(true);
 
+    // Pause alarm to avoid mic interference
     stopMelodyLoop();
 
     try {
@@ -615,9 +632,9 @@ export default function App() {
         const average = sum / dataArray.length;
         setVoiceVolumeLevel(Math.min(100, Math.round((average / 128) * 100)));
 
-        if (average > 32) {
+        if (average > 30) {
           voiceHits += 1;
-          setTranscript('Listening: Loud Voice Detected!');
+          setTranscript('Loud Voice Detected!');
           if (voiceHits >= 4) {
             manualStopRef.current = true;
             setTimeout(() => advancePipeline(), 250);
@@ -792,7 +809,7 @@ export default function App() {
     setNewAlarmCustomNote('');
   };
 
-  // Real-time Clock Monitor
+  // Real-time Clock Monitor (Rings on matching time)
   useEffect(() => {
     const checkAlarmTime = () => {
       if (isRinging) return;
@@ -1066,7 +1083,7 @@ export default function App() {
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
                 <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>Open BOTH Eyes</h3>
                 <p style={{ fontSize: '11px', color: '#c7a9e9', margin: 0 }}>
-                  Both eyes must be wide open for 1.5s!
+                  Keep both eyes wide open for 1.5s!
                 </p>
 
                 <div style={{
@@ -1814,9 +1831,9 @@ export default function App() {
               </div>
             </div>
 
-            {/* Controls */}
+            {/* Controls (Clean minimal view) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-
+              
               {/* Missions Config Button */}
               <div 
                 onClick={() => setIsMissionConfigOpen(true)}
