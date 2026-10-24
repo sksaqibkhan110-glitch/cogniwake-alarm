@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   ChevronRight, Volume2, VolumeX, BellRing, Plus, Trash2, X, Check, 
-  RefreshCw, Moon, Bell, Camera, Mic, Upload, Music, Flame, FileText 
+  RefreshCw, Moon, Bell, Camera, Mic, Upload, Music, Flame, FileText, Activity
 } from 'lucide-react';
 import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
 import { supabase } from './supabase';
 
-const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v6';
+const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v8';
 const USER_ID_KEY = 'cogniwake_user_uid_v1';
 const CUSTOM_AUDIO_KEY = 'cogniwake_custom_audio_cache_v1';
 
@@ -60,10 +60,12 @@ export default function App() {
   const [alarmNote, setAlarmNote] = useState('Gym & Morning Workout!');
   const [activeRingingNote, setActiveRingingNote] = useState('');
 
+  // Modular Verification Missions (4 Active)
   const [enabledMissions, setEnabledMissions] = useState({
     math: true,
     eyes: true,
-    voice: true
+    voice: true,
+    dance: true
   });
   const [isMissionConfigOpen, setIsMissionConfigOpen] = useState(false);
 
@@ -108,8 +110,9 @@ export default function App() {
   const animFrameIdRef = useRef(null);
   const eyesOpenDurationRef = useRef(0);
 
-  // Step 3: Strict Voice Matching
+  // Step 3: Strict Voice Matching with Synchronous Ref
   const [targetVoicePhrase, setTargetVoicePhrase] = useState(WAKE_PHRASES[0]);
+  const targetVoicePhraseRef = useRef(WAKE_PHRASES[0]);
   const [transcript, setTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [voiceVolumeLevel, setVoiceVolumeLevel] = useState(0);
@@ -119,6 +122,15 @@ export default function App() {
   const micAudioCtxRef = useRef(null);
   const micAnimRef = useRef(null);
   const manualStopRef = useRef(false);
+
+  // Step 4: Dance / Full Body Motion State & Refs
+  const danceVideoRef = useRef(null);
+  const [danceStream, setDanceStream] = useState(null);
+  const [danceProgress, setDanceProgress] = useState(0);
+  const [danceStatus, setDanceStatus] = useState('Step back & start dancing!');
+  const danceAnimRef = useRef(null);
+  const danceScoreRef = useRef(0);
+  const prevFrameDataRef = useRef(null);
 
   // Audio Engine Refs
   const audioCtxRef = useRef(null);
@@ -149,7 +161,7 @@ export default function App() {
     };
   }, []);
 
-  // Custom audio cache
+  // Custom Audio Cache
   useEffect(() => {
     const cached = localStorage.getItem(CUSTOM_AUDIO_KEY);
     if (cached) setCustomAudioData(cached);
@@ -184,7 +196,7 @@ export default function App() {
     return () => { isMounted = false; };
   }, []);
 
-  // Load from Supabase
+  // Load from Supabase / LocalStorage
   useEffect(() => {
     let uid = localStorage.getItem(USER_ID_KEY);
     if (!uid) {
@@ -464,6 +476,7 @@ export default function App() {
     if (enabledMissions.math) pipe.push('math');
     if (enabledMissions.eyes) pipe.push('eyes');
     if (enabledMissions.voice) pipe.push('voice');
+    if (enabledMissions.dance) pipe.push('dance');
     return pipe;
   };
 
@@ -577,7 +590,7 @@ export default function App() {
     }
   }, [modelReady]);
 
-  // STEP 3: STRICT VOICE MATCHING
+  // STEP 3: STRICT VOICE MATCHING WITH ROBUST SUBSTRING & DECIBEL BACKUP
   const stopMicrophoneEngine = () => {
     manualStopRef.current = true;
     setIsListening(false);
@@ -606,6 +619,8 @@ export default function App() {
 
     stopMelodyLoop();
 
+    let loudSpokenHits = 0;
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       micStreamRef.current = stream;
@@ -629,6 +644,16 @@ export default function App() {
         for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
         const average = sum / dataArray.length;
         setVoiceVolumeLevel(Math.min(100, Math.round((average / 128) * 100)));
+
+        // Unchi awaaz me bolte hi fallback counter boost karega
+        if (average > 35) {
+          loudSpokenHits++;
+          if (loudSpokenHits >= 7) {
+            manualStopRef.current = true;
+            advancePipeline();
+            return;
+          }
+        }
 
         micAnimRef.current = requestAnimationFrame(analyzeAudio);
       };
@@ -657,15 +682,22 @@ export default function App() {
           heard = heard.toLowerCase().replace(/[.,!?-]/g, '').trim();
           setTranscript(heard);
 
-          // STRICT ACCURACY CHECK: Kam se kam 70% matching words hone chahiye
-          const targetClean = targetVoicePhrase.toLowerCase().replace(/[.,!?-]/g, '').trim();
-          const targetWords = targetClean.split(/\s+/);
+          const currentTarget = (targetVoicePhraseRef.current || targetVoicePhrase)
+            .toLowerCase()
+            .replace(/[.,!?-]/g, '')
+            .trim();
+
+          const targetWords = currentTarget.split(/\s+/).filter((w) => w.length > 2);
           const heardWords = heard.split(/\s+/);
 
-          const matchedWordsCount = targetWords.filter(w => heardWords.includes(w)).length;
-          const matchRatio = matchedWordsCount / targetWords.length;
+          // Flexible match: Agar 2 main words match ho ya phrase contains ho
+          const matchedWordsCount = targetWords.filter((w) =>
+            heardWords.some((hw) => hw.includes(w) || w.includes(hw))
+          ).length;
 
-          if (matchRatio >= 0.7 || heard.includes(targetClean)) {
+          const matchRatio = matchedWordsCount / Math.max(1, targetWords.length);
+
+          if (matchRatio >= 0.45 || matchedWordsCount >= 2 || heard.includes(currentTarget)) {
             manualStopRef.current = true;
             advancePipeline();
           }
@@ -682,6 +714,93 @@ export default function App() {
     }
   };
 
+  // STEP 4: DANCE / FULL BODY MOTION ENGINE (Motion Delta Tracker)
+  const stopDanceEngine = () => {
+    if (danceAnimRef.current) {
+      cancelAnimationFrame(danceAnimRef.current);
+      danceAnimRef.current = null;
+    }
+    if (danceStream) {
+      danceStream.getTracks().forEach((t) => t.stop());
+      setDanceStream(null);
+    }
+    prevFrameDataRef.current = null;
+  };
+
+  const startDanceMission = async () => {
+    danceScoreRef.current = 0;
+    setDanceProgress(0);
+    setDanceStatus('Starting Motion Camera...');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } }
+      });
+      setDanceStream(stream);
+
+      if (danceVideoRef.current) {
+        danceVideoRef.current.srcObject = stream;
+        danceVideoRef.current.setAttribute('playsinline', 'true');
+        danceVideoRef.current.muted = true;
+        await danceVideoRef.current.play();
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 48;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        const trackMotion = () => {
+          if (!danceVideoRef.current || danceVideoRef.current.readyState < 2) {
+            danceAnimRef.current = requestAnimationFrame(trackMotion);
+            return;
+          }
+
+          ctx.drawImage(danceVideoRef.current, 0, 0, 64, 48);
+          const currentFrame = ctx.getImageData(0, 0, 64, 48).data;
+
+          if (prevFrameDataRef.current) {
+            let diff = 0;
+            const step = 4;
+            for (let i = 0; i < currentFrame.length; i += 4 * step) {
+              const rDiff = Math.abs(currentFrame[i] - prevFrameDataRef.current[i]);
+              const gDiff = Math.abs(currentFrame[i + 1] - prevFrameDataRef.current[i + 1]);
+              const bDiff = Math.abs(currentFrame[i + 2] - prevFrameDataRef.current[i + 2]);
+              if (rDiff + gDiff + bDiff > 45) {
+                diff++;
+              }
+            }
+
+            if (diff > 40) {
+              danceScoreRef.current += 1.2;
+              setDanceStatus('🔥 Keep Moving! Great energy!');
+            } else {
+              danceScoreRef.current = Math.max(0, danceScoreRef.current - 0.4);
+              setDanceStatus('💃 Step back & Dance / Shake!');
+            }
+
+            const prog = Math.min(100, Math.round((danceScoreRef.current / 30) * 100));
+            setDanceProgress(prog);
+
+            if (prog >= 100) {
+              stopDanceEngine();
+              setDanceStatus('🎉 Awesome Dance! Wake-Up Complete!');
+              setTimeout(() => advancePipeline(), 300);
+              return;
+            }
+          }
+
+          prevFrameDataRef.current = currentFrame;
+          danceAnimRef.current = requestAnimationFrame(trackMotion);
+        };
+
+        danceAnimRef.current = requestAnimationFrame(trackMotion);
+      }
+    } catch (err) {
+      console.warn("Dance camera error:", err);
+      setDanceStatus('Camera blocked! Allow camera.');
+    }
+  };
+
   const startStep = (stepName) => {
     if (stepName === 'math') {
       generateMathMission();
@@ -690,12 +809,16 @@ export default function App() {
     } else if (stepName === 'voice') {
       const randomPhrase = WAKE_PHRASES[Math.floor(Math.random() * WAKE_PHRASES.length)];
       setTargetVoicePhrase(randomPhrase);
+      targetVoicePhraseRef.current = randomPhrase;
+    } else if (stepName === 'dance') {
+      startDanceMission();
     }
   };
 
   const advancePipeline = () => {
     stopCamera();
     stopMicrophoneEngine();
+    stopDanceEngine();
 
     const currentPipe = activePipelineRef.current;
     const nextIdx = pipelineIndexRef.current + 1;
@@ -749,6 +872,7 @@ export default function App() {
     stopMelodyLoop();
     stopCamera();
     stopMicrophoneEngine();
+    stopDanceEngine();
     setIsRinging(false);
 
     let remainingSeconds = 60;
@@ -773,6 +897,7 @@ export default function App() {
     stopMelodyLoop();
     stopCamera();
     stopMicrophoneEngine();
+    stopDanceEngine();
     setIsRinging(false);
     setIsPlayingPreview(false);
     activePipelineRef.current = [];
@@ -782,6 +907,7 @@ export default function App() {
     setTranscript('');
     setOpenEyesProgress(0);
     setVoiceVolumeLevel(0);
+    setDanceProgress(0);
     if (snoozeTimerRef.current) {
       clearInterval(snoozeTimerRef.current);
       snoozeTimerRef.current = null;
@@ -908,7 +1034,7 @@ export default function App() {
     };
   }, [activeHandle, handleMove]);
 
-  // EXACT ALIGNMENT MATH: Radius 94 on 210x210 Viewport
+  // Exact Alignment Math
   const radius = 94;
   const centerCoord = 105;
   const circumference = 2 * Math.PI * radius;
@@ -1060,7 +1186,7 @@ export default function App() {
               {activePipeline.length > 0 ? `Mission ${pipelineIndex + 1} of ${activePipeline.length}` : 'Alarm Ringing'}
             </span>
 
-            {/* STEP: MATH */}
+            {/* STEP 1: MATH */}
             {currentActiveStepName === 'math' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '6px' }}>
                 <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>Solve Math Problem</h3>
@@ -1138,7 +1264,7 @@ export default function App() {
               </div>
             )}
 
-            {/* STEP: BOTH EYES */}
+            {/* STEP 2: BOTH EYES */}
             {currentActiveStepName === 'eyes' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
                 <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>Open BOTH Eyes</h3>
@@ -1182,7 +1308,7 @@ export default function App() {
               </div>
             )}
 
-            {/* STEP: STRICT VOICE PHRASE */}
+            {/* STEP 3: STRICT VOICE PHRASE */}
             {currentActiveStepName === 'voice' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
                 <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>Speak Exact Phrase!</h3>
@@ -1251,6 +1377,68 @@ export default function App() {
                 >
                   <Mic size={18} /> {isListening ? 'Listening... Speak Now!' : 'Tap Mic & Read Phrase'}
                 </button>
+              </div>
+            )}
+
+            {/* STEP 4: DANCE / FULL BODY MOTION SHAKE */}
+            {currentActiveStepName === 'dance' && (
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
+                <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>💃 Morning Dance Mission</h3>
+                <p style={{ fontSize: '11px', color: '#c7a9e9', margin: 0 }}>
+                  Step back & dance or jump for 10 seconds!
+                </p>
+
+                <div style={{
+                  position: 'relative',
+                  width: '180px',
+                  height: '180px',
+                  borderRadius: '24px',
+                  overflow: 'hidden',
+                  border: danceProgress > 70 ? '3px solid #10b981' : '3px solid #ff1b90',
+                  boxShadow: danceProgress > 70 ? '0 0 30px rgba(16, 185, 129, 0.7)' : '0 0 30px rgba(255, 27, 144, 0.7)',
+                  backgroundColor: '#000'
+                }}>
+                  <video
+                    ref={danceVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
+                  />
+
+                  <div style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: '8px',
+                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    padding: '4px 8px',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '10px',
+                    fontWeight: 800,
+                    color: '#ff79c6'
+                  }}>
+                    <Activity size={12} color="#ff1b90" />
+                    <span>{danceProgress}%</span>
+                  </div>
+                </div>
+
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700 }}>
+                    <span style={{ color: danceProgress > 70 ? '#10b981' : '#ff79c6' }}>{danceStatus}</span>
+                    <span>{danceProgress}%</span>
+                  </div>
+                  <div style={{ width: '100%', height: '8px', backgroundColor: '#270e44', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${danceProgress}%`,
+                      height: '100%',
+                      background: danceProgress > 70 ? 'linear-gradient(90deg, #10b981, #059669)' : 'linear-gradient(90deg, #ff1a8c, #c40b68)',
+                      transition: 'width 0.15s ease'
+                    }} />
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1323,7 +1511,7 @@ export default function App() {
             boxShadow: '0 20px 50px rgba(255, 27, 144, 0.4)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '14px',
+            gap: '12px',
             color: '#fff'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1343,13 +1531,13 @@ export default function App() {
               alignItems: 'center',
               justifyContent: 'space-between',
               backgroundColor: '#270e44',
-              padding: '12px 14px',
+              padding: '10px 12px',
               borderRadius: '16px',
               border: enabledMissions.math ? '1px solid #ff1b90' : '1px solid #3d1768'
             }}>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 800 }}>🧮 1. Math Challenge</div>
-                <div style={{ fontSize: '10px', color: '#8d72b2' }}>Calculates arithmetic logic</div>
+                <div style={{ fontSize: '10px', color: '#8d72b2' }}>Arithmetic calculation</div>
               </div>
               <input
                 type="checkbox"
@@ -1364,7 +1552,7 @@ export default function App() {
               alignItems: 'center',
               justifyContent: 'space-between',
               backgroundColor: '#270e44',
-              padding: '12px 14px',
+              padding: '10px 12px',
               borderRadius: '16px',
               border: enabledMissions.eyes ? '1px solid #ff1b90' : '1px solid #3d1768'
             }}>
@@ -1385,7 +1573,7 @@ export default function App() {
               alignItems: 'center',
               justifyContent: 'space-between',
               backgroundColor: '#270e44',
-              padding: '12px 14px',
+              padding: '10px 12px',
               borderRadius: '16px',
               border: enabledMissions.voice ? '1px solid #ff1b90' : '1px solid #3d1768'
             }}>
@@ -1401,6 +1589,27 @@ export default function App() {
               />
             </div>
 
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#270e44',
+              padding: '10px 12px',
+              borderRadius: '16px',
+              border: enabledMissions.dance ? '1px solid #ff1b90' : '1px solid #3d1768'
+            }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 800 }}>💃 4. Morning Dance (10s)</div>
+                <div style={{ fontSize: '10px', color: '#8d72b2' }}>Step back & shake/dance</div>
+              </div>
+              <input
+                type="checkbox"
+                checked={enabledMissions.dance}
+                onChange={(e) => setEnabledMissions({ ...enabledMissions, dance: e.target.checked })}
+                style={{ width: '18px', height: '18px', accentColor: '#ff1b90', cursor: 'pointer' }}
+              />
+            </div>
+
             <button
               onClick={() => setIsMissionConfigOpen(false)}
               style={{
@@ -1412,7 +1621,8 @@ export default function App() {
                 color: '#fff',
                 fontSize: '14px',
                 fontWeight: 800,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                marginTop: '4px'
               }}
             >
               Done & Save
@@ -1830,7 +2040,7 @@ export default function App() {
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#120324' }} />
                 </div>
 
-                {/* Wake Handle (Accurately aligned without drift) */}
+                {/* Wake Handle */}
                 <div
                   onMouseDown={() => setActiveHandle('wake')}
                   onTouchStart={() => setActiveHandle('wake')}
