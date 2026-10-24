@@ -6,7 +6,7 @@ import {
 import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
 import { supabase } from './supabase';
 
-const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v4';
+const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v5';
 const USER_ID_KEY = 'cogniwake_user_uid_v1';
 const CUSTOM_AUDIO_KEY = 'cogniwake_custom_audio_cache_v1';
 
@@ -51,7 +51,7 @@ export default function App() {
   // Strict 1-Minute Snooze Control
   const [strictSnoozeEnabled, setStrictSnoozeEnabled] = useState(false);
 
-  // Wake-Up Note Feature (Stored & Triggered per Alarm)
+  // Wake-Up Note Feature
   const [alarmNote, setAlarmNote] = useState('Gym & Morning Workout!');
   const [activeRingingNote, setActiveRingingNote] = useState('');
 
@@ -85,9 +85,11 @@ export default function App() {
   const [isRinging, setIsRinging] = useState(false);
   const [ringingAlarmInfo, setRingingAlarmInfo] = useState('');
 
-  // Active Mission Step Pipeline
+  // Active Mission Step Pipeline & Index Ref for Synchronous Safety
   const [activePipeline, setActivePipeline] = useState([]);
   const [pipelineIndex, setPipelineIndex] = useState(0);
+  const activePipelineRef = useRef([]);
+  const pipelineIndexRef = useRef(0);
 
   // Step 1: Math
   const [mathProblem, setMathProblem] = useState({ question: '', answer: 0 });
@@ -129,7 +131,7 @@ export default function App() {
   const userIdRef = useRef(null);
   const saveTimeoutRef = useRef(null);
 
-  // Screen Wake Lock API
+  // Keep screen awake
   useEffect(() => {
     let wakeLock = null;
     const requestWakeLock = async () => {
@@ -151,7 +153,7 @@ export default function App() {
     if (cached) setCustomAudioData(cached);
   }, []);
 
-  // Initialize MediaPipe FaceLandmarker with CPU Safe Fallback
+  // Initialize MediaPipe AI Model (CPU Mode ensures zero GPU fallback crashes)
   useEffect(() => {
     let isMounted = true;
     async function initMediaPipe() {
@@ -180,7 +182,7 @@ export default function App() {
     return () => { isMounted = false; };
   }, []);
 
-  // Load User Data from Supabase / LocalStorage
+  // Sync Supabase & LocalStorage
   useEffect(() => {
     let uid = localStorage.getItem(USER_ID_KEY);
     if (!uid) {
@@ -268,7 +270,7 @@ export default function App() {
     };
   }, [bedAngle, wakeAngle, alarmEnabled, volume, alarms, alarmNote, enabledMissions, strictSnoozeEnabled, isLoaded]);
 
-  // Volume Slider Live Update
+  // Volume Controller
   const handleVolumeChange = (newVal) => {
     const val = Number(newVal);
     setVolume(val);
@@ -482,7 +484,7 @@ export default function App() {
     setMathError(false);
   }, []);
 
-  // STEP 2: ROBUST EYE TRACKING WITH REAL-TIME FRAMES LOOP
+  // STEP 2: EYE TRACKING CAMERA SHUTDOWN
   const stopCamera = () => {
     if (animFrameIdRef.current) {
       cancelAnimationFrame(animFrameIdRef.current);
@@ -532,11 +534,11 @@ export default function App() {
                 if (progress >= 100) {
                   stopCamera();
                   setEyesOpenStatus('Verified! Well done.');
-                  setTimeout(() => advancePipeline(), 350);
+                  setTimeout(() => advancePipeline(), 250);
                   return;
                 }
               } else {
-                setEyesOpenStatus('Face not centered. Face the camera!');
+                setEyesOpenStatus('Face not centered. Look at camera!');
               }
             } catch (err) {
               console.warn("Detection frame error:", err);
@@ -604,7 +606,7 @@ export default function App() {
     manualStopRef.current = false;
     setIsListening(true);
 
-    // Pause alarm to avoid mic interference
+    // Alarm melody loop pause taaki mic clear sun sake
     stopMelodyLoop();
 
     try {
@@ -682,21 +684,7 @@ export default function App() {
     }
   };
 
-  // Pipeline Advancement Logic
-  const advancePipeline = () => {
-    stopCamera();
-    stopMicrophoneEngine();
-
-    const nextIndex = pipelineIndex + 1;
-    if (nextIndex < activePipeline.length) {
-      setPipelineIndex(nextIndex);
-      const nextStep = activePipeline[nextIndex];
-      startStep(nextStep);
-    } else {
-      finalizeAlarmDismissal();
-    }
-  };
-
+  // Safe Step Launcher
   const startStep = (stepName) => {
     if (stepName === 'math') {
       generateMathMission();
@@ -705,12 +693,34 @@ export default function App() {
     }
   };
 
+  // Safe Multi-Step Pipeline Advance (Prevents skipping Voice step)
+  const advancePipeline = () => {
+    stopCamera();
+    stopMicrophoneEngine();
+
+    const currentPipe = activePipelineRef.current;
+    const nextIdx = pipelineIndexRef.current + 1;
+
+    if (nextIdx < currentPipe.length) {
+      pipelineIndexRef.current = nextIdx;
+      setPipelineIndex(nextIdx);
+      const nextStep = currentPipe[nextIdx];
+      setTimeout(() => startStep(nextStep), 200);
+    } else {
+      finalizeAlarmDismissal();
+    }
+  };
+
   const triggerAlarmRing = (info, note = '') => {
     setRingingAlarmInfo(info);
     setActiveRingingNote(note || alarmNote);
+
     const pipe = buildPipeline();
+    activePipelineRef.current = pipe;
+    pipelineIndexRef.current = 0;
     setActivePipeline(pipe);
     setPipelineIndex(0);
+
     setIsRinging(true);
     startMelodyLoop();
 
@@ -744,6 +754,8 @@ export default function App() {
     stopMicrophoneEngine();
     setIsRinging(false);
     setIsPlayingPreview(false);
+    activePipelineRef.current = [];
+    pipelineIndexRef.current = 0;
     setActivePipeline([]);
     setPipelineIndex(0);
     setTranscript('');
@@ -809,7 +821,7 @@ export default function App() {
     setNewAlarmCustomNote('');
   };
 
-  // Real-time Clock Monitor (Rings on matching time)
+  // Real-time Clock Monitor (Triggers exact alarms)
   useEffect(() => {
     const checkAlarmTime = () => {
       if (isRinging) return;
@@ -904,7 +916,7 @@ export default function App() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '24px 16px',
+      padding: '16px 8px',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       boxSizing: 'border-box',
       userSelect: 'none',
@@ -925,7 +937,8 @@ export default function App() {
           padding: '16px'
         }}>
           <div style={{
-            width: '340px',
+            width: '100%',
+            maxWidth: '350px',
             backgroundColor: '#1b0633',
             border: '2px solid #ff1b90',
             borderRadius: '32px',
@@ -955,7 +968,7 @@ export default function App() {
               </div>
             )}
 
-            {/* WAKE-UP NOTE BANNER (DISPLAYS PROMINENTLY AT TOP) */}
+            {/* WAKE-UP NOTE BANNER (FRONT AND CENTER) */}
             {activeRingingNote && (
               <div style={{
                 width: '100%',
@@ -1255,7 +1268,8 @@ export default function App() {
           padding: '16px'
         }}>
           <div style={{
-            width: '320px',
+            width: '100%',
+            maxWidth: '320px',
             backgroundColor: '#1b0633',
             border: '2px solid #ff1b90',
             borderRadius: '28px',
@@ -1375,7 +1389,8 @@ export default function App() {
           padding: '16px'
         }}>
           <div style={{
-            width: '320px',
+            width: '100%',
+            maxWidth: '320px',
             backgroundColor: '#1b0633',
             border: '2px solid #3d1768',
             borderRadius: '28px',
@@ -1540,7 +1555,8 @@ export default function App() {
           <form
             onSubmit={handleAddNewAlarm}
             style={{
-              width: '300px',
+              width: '100%',
+              maxWidth: '300px',
               backgroundColor: '#1b0633',
               border: '2px solid #3d1768',
               borderRadius: '28px',
@@ -1644,7 +1660,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ==================== SINGLE PHONE FRAME ==================== */}
+      {/* ==================== SINGLE APP FRAME ==================== */}
       <div style={{
         width: '100%',
         maxWidth: '350px',
@@ -1831,7 +1847,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Controls (Clean minimal view) */}
+            {/* Controls (Clean Minimal Layout) */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               
               {/* Missions Config Button */}
