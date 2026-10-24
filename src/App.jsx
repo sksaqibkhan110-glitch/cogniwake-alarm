@@ -6,7 +6,7 @@ import {
 import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
 import { supabase } from './supabase';
 
-const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v8';
+const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v9';
 const USER_ID_KEY = 'cogniwake_user_uid_v1';
 const CUSTOM_AUDIO_KEY = 'cogniwake_custom_audio_cache_v1';
 
@@ -590,7 +590,7 @@ export default function App() {
     }
   }, [modelReady]);
 
-  // STEP 3: STRICT VOICE MATCHING WITH ROBUST SUBSTRING & DECIBEL BACKUP
+  // STEP 3: STRICT VOICE MATCHING (Speech-Only, Zero Noise Bypass)
   const stopMicrophoneEngine = () => {
     manualStopRef.current = true;
     setIsListening(false);
@@ -619,8 +619,6 @@ export default function App() {
 
     stopMelodyLoop();
 
-    let loudSpokenHits = 0;
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       micStreamRef.current = stream;
@@ -644,16 +642,6 @@ export default function App() {
         for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
         const average = sum / dataArray.length;
         setVoiceVolumeLevel(Math.min(100, Math.round((average / 128) * 100)));
-
-        // Unchi awaaz me bolte hi fallback counter boost karega
-        if (average > 35) {
-          loudSpokenHits++;
-          if (loudSpokenHits >= 7) {
-            manualStopRef.current = true;
-            advancePipeline();
-            return;
-          }
-        }
 
         micAnimRef.current = requestAnimationFrame(analyzeAudio);
       };
@@ -690,14 +678,12 @@ export default function App() {
           const targetWords = currentTarget.split(/\s+/).filter((w) => w.length > 2);
           const heardWords = heard.split(/\s+/);
 
-          // Flexible match: Agar 2 main words match ho ya phrase contains ho
+          // STRICT CHECK: Kam se kam 3 meaningful target words hone chahiye
           const matchedWordsCount = targetWords.filter((w) =>
-            heardWords.some((hw) => hw.includes(w) || w.includes(hw))
+            heardWords.some((hw) => hw === w || hw.includes(w) || w.includes(hw))
           ).length;
 
-          const matchRatio = matchedWordsCount / Math.max(1, targetWords.length);
-
-          if (matchRatio >= 0.45 || matchedWordsCount >= 2 || heard.includes(currentTarget)) {
+          if (matchedWordsCount >= Math.min(3, targetWords.length) || heard.includes(currentTarget)) {
             manualStopRef.current = true;
             advancePipeline();
           }
@@ -714,7 +700,7 @@ export default function App() {
     }
   };
 
-  // STEP 4: DANCE / FULL BODY MOTION ENGINE (Motion Delta Tracker)
+  // STEP 4: HIGH-SENSITIVITY MOTION TRACKER (Smooth 0-100% Dance Engine)
   const stopDanceEngine = () => {
     if (danceAnimRef.current) {
       cancelAnimationFrame(danceAnimRef.current);
@@ -734,7 +720,7 @@ export default function App() {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } }
+        video: { facingMode: 'user', width: 320, height: 240 }
       });
       setDanceStream(stream);
 
@@ -745,46 +731,46 @@ export default function App() {
         await danceVideoRef.current.play();
 
         const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 48;
+        canvas.width = 48;
+        canvas.height = 36;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
         const trackMotion = () => {
-          if (!danceVideoRef.current || danceVideoRef.current.readyState < 2) {
+          const video = danceVideoRef.current;
+          if (!video || video.readyState < 2) {
             danceAnimRef.current = requestAnimationFrame(trackMotion);
             return;
           }
 
-          ctx.drawImage(danceVideoRef.current, 0, 0, 64, 48);
-          const currentFrame = ctx.getImageData(0, 0, 64, 48).data;
+          ctx.drawImage(video, 0, 0, 48, 36);
+          const currentFrame = ctx.getImageData(0, 0, 48, 36).data;
 
           if (prevFrameDataRef.current) {
-            let diff = 0;
-            const step = 4;
-            for (let i = 0; i < currentFrame.length; i += 4 * step) {
-              const rDiff = Math.abs(currentFrame[i] - prevFrameDataRef.current[i]);
-              const gDiff = Math.abs(currentFrame[i + 1] - prevFrameDataRef.current[i + 1]);
-              const bDiff = Math.abs(currentFrame[i + 2] - prevFrameDataRef.current[i + 2]);
-              if (rDiff + gDiff + bDiff > 45) {
-                diff++;
-              }
+            let movementEnergy = 0;
+            // Sampling pixels for speed & responsive detection
+            for (let i = 0; i < currentFrame.length; i += 8) {
+              const diff = Math.abs(currentFrame[i] - prevFrameDataRef.current[i]) +
+                           Math.abs(currentFrame[i + 1] - prevFrameDataRef.current[i + 1]) +
+                           Math.abs(currentFrame[i + 2] - prevFrameDataRef.current[i + 2]);
+              if (diff > 35) movementEnergy++;
             }
 
-            if (diff > 40) {
-              danceScoreRef.current += 1.2;
-              setDanceStatus('🔥 Keep Moving! Great energy!');
+            // Sensitive motion threshold: Hand wave ya body jump dono smoothly detect honge
+            if (movementEnergy > 15) {
+              danceScoreRef.current += 1.8;
+              setDanceStatus('🔥 Awesome! Keep Moving & Shaking!');
             } else {
-              danceScoreRef.current = Math.max(0, danceScoreRef.current - 0.4);
-              setDanceStatus('💃 Step back & Dance / Shake!');
+              danceScoreRef.current = Math.max(0, danceScoreRef.current - 0.2);
+              setDanceStatus('💃 Keep moving your body / hands!');
             }
 
-            const prog = Math.min(100, Math.round((danceScoreRef.current / 30) * 100));
+            const prog = Math.min(100, Math.round((danceScoreRef.current / 35) * 100));
             setDanceProgress(prog);
 
             if (prog >= 100) {
               stopDanceEngine();
-              setDanceStatus('🎉 Awesome Dance! Wake-Up Complete!');
-              setTimeout(() => advancePipeline(), 300);
+              setDanceStatus('🎉 Mission Passed! Great energy!');
+              setTimeout(() => advancePipeline(), 250);
               return;
             }
           }
@@ -1380,12 +1366,12 @@ export default function App() {
               </div>
             )}
 
-            {/* STEP 4: DANCE / FULL BODY MOTION SHAKE */}
+            {/* STEP 4: DANCE / HIGH-SENSITIVITY MOTION SHAKE */}
             {currentActiveStepName === 'dance' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
                 <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>💃 Morning Dance Mission</h3>
                 <p style={{ fontSize: '11px', color: '#c7a9e9', margin: 0 }}>
-                  Step back & dance or jump for 10 seconds!
+                  Step back & dance or wave your hands actively!
                 </p>
 
                 <div style={{
