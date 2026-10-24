@@ -9,6 +9,13 @@ import { supabase } from './supabase';
 const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v5';
 const USER_ID_KEY = 'cogniwake_user_uid_v1';
 const CUSTOM_AUDIO_KEY = 'cogniwake_custom_audio_cache_v1';
+const VOICE_PHRASES = [
+  'I am wide awake and ready to conquer the day',
+  'Rise and shine, no more sleep today',
+  'No excuses, time to achieve my goals',
+  'The sun is up and so am I',
+  'Today is a brand new opportunity'
+];
 
 // Full 22 Sounds Library
 const DEFAULT_SOUNDS = [
@@ -98,7 +105,7 @@ export default function App() {
 
   // Step 2: Strict Both Eyes Tracking
   const videoRef = useRef(null);
-  const [cameraStream, setCameraStream] = useState(null);
+  const cameraStreamRef = useRef(null);
   const landmarkerRef = useRef(null);
   const [modelReady, setModelReady] = useState(false);
   const [eyesOpenStatus, setEyesOpenStatus] = useState('Initializing AI...');
@@ -107,7 +114,7 @@ export default function App() {
   const eyesOpenDurationRef = useRef(0);
 
   // Step 3: Voice States & Decibel Meter
-  const TARGET_VOICE_PHRASE = "wakey wakey it is time to wake up";
+  const [currentVoicePhrase, setCurrentVoicePhrase] = useState('');
   const [transcript, setTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [voiceVolumeLevel, setVoiceVolumeLevel] = useState(0);
@@ -490,9 +497,9 @@ export default function App() {
       cancelAnimationFrame(animFrameIdRef.current);
       animFrameIdRef.current = null;
     }
-    if (cameraStream) {
-      cameraStream.getTracks().forEach((track) => track.stop());
-      setCameraStream(null);
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
     }
   };
 
@@ -532,9 +539,13 @@ export default function App() {
                 setOpenEyesProgress(progress);
 
                 if (progress >= 100) {
+                  if (animFrameIdRef.current) {
+                    cancelAnimationFrame(animFrameIdRef.current);
+                    animFrameIdRef.current = null;
+                  }
                   stopCamera();
                   setEyesOpenStatus('Verified! Well done.');
-                  setTimeout(() => advancePipeline(), 250);
+                  advancePipeline();
                   return;
                 }
               } else {
@@ -563,7 +574,7 @@ export default function App() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } }
       });
-      setCameraStream(stream);
+      cameraStreamRef.current = stream;
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -632,9 +643,10 @@ export default function App() {
         let sum = 0;
         for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
         const average = sum / dataArray.length;
-        setVoiceVolumeLevel(Math.min(100, Math.round((average / 128) * 100)));
+        const volumeLevel = Math.min(100, Math.round((average / 128) * 100));
+        setVoiceVolumeLevel(volumeLevel);
 
-        if (average > 30) {
+        if (volumeLevel > 30) {
           voiceHits += 1;
           setTranscript('Loud Voice Detected!');
           if (voiceHits >= 4) {
@@ -666,14 +678,18 @@ export default function App() {
         recognition.interimResults = true;
 
         recognition.onresult = (event) => {
+          if (manualStopRef.current) return;
+
           let heard = '';
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
+          for (let i = 0; i < event.results.length; ++i) {
             heard += event.results[i][0].transcript;
           }
           heard = heard.toLowerCase().trim();
           setTranscript(heard);
 
-          if (heard.includes('wakey') || heard.includes('wake up') || heard.includes('rise')) {
+          const normalizedHeard = heard.replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+          const normalizedPhrase = currentVoicePhrase.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+          if (normalizedPhrase && normalizedHeard.includes(normalizedPhrase)) {
             manualStopRef.current = true;
             advancePipeline();
           }
@@ -690,26 +706,30 @@ export default function App() {
       generateMathMission();
     } else if (stepName === 'eyes') {
       startEyeDetection();
+    } else if (stepName === 'voice') {
+      const phraseIndex = Math.floor(Math.random() * VOICE_PHRASES.length);
+      setCurrentVoicePhrase(VOICE_PHRASES[phraseIndex]);
+      setVoiceError('');
+      setTranscript('');
     }
   };
 
   // Safe Multi-Step Pipeline Advance (Prevents skipping Voice step)
-  const advancePipeline = () => {
+  function advancePipeline() {
     stopCamera();
     stopMicrophoneEngine();
 
     const currentPipe = activePipelineRef.current;
     const nextIdx = pipelineIndexRef.current + 1;
+    pipelineIndexRef.current = nextIdx;
 
     if (nextIdx < currentPipe.length) {
-      pipelineIndexRef.current = nextIdx;
       setPipelineIndex(nextIdx);
-      const nextStep = currentPipe[nextIdx];
-      setTimeout(() => startStep(nextStep), 200);
+      startStep(currentPipe[nextIdx]);
     } else {
       finalizeAlarmDismissal();
     }
-  };
+  }
 
   const triggerAlarmRing = (info, note = '') => {
     setRingingAlarmInfo(info);
@@ -1152,7 +1172,7 @@ export default function App() {
                   boxSizing: 'border-box'
                 }}>
                   <span style={{ fontSize: '14px', fontWeight: 800, color: '#ffd0eb', fontStyle: 'italic' }}>
-                    "{TARGET_VOICE_PHRASE}"
+                    "{currentVoicePhrase}"
                   </span>
                 </div>
 
