@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   ChevronRight, Volume2, VolumeX, BellRing, Plus, Trash2, X, Check, 
-  RefreshCw, Moon, Bell, Camera, Mic, Upload, Music, Flame, FileText, Activity
+  RefreshCw, Moon, Bell, Camera, Mic, Upload, Music, Flame, FileText, Activity, Calendar as CalendarIcon
 } from 'lucide-react';
 import { FilesetResolver, FaceLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { supabase } from './supabase';
 
-const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v12';
+const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v14';
 const USER_ID_KEY = 'cogniwake_user_uid_v1';
 const CUSTOM_AUDIO_KEY = 'cogniwake_custom_audio_cache_v1';
 
@@ -20,14 +20,14 @@ const WAKE_PHRASES = [
 
 // 5 Dedicated Bollywood Dance Tracks for Mission 4
 const DANCE_PLAYLIST = [
-  { id: 'bollywood', name: '🥁 Energetic Bollywood Track', src: encodeURI('/sounds/Energetic Bollywood Track.mp3') },
-  { id: 'disco', name: '💃 Kisi Disco Me Jaye', src: encodeURI('/sounds/kisi disco me jaye.mp3') },
-  { id: 'nacho', name: '🕺 Hil Hil Ke Nacho', src: encodeURI('/sounds/Hil Hil ke Nacho Nacho.mp3') },
-  { id: 'zohrajabeen', name: '✨ Aye Meri Zohrajabeen', src: encodeURI('/sounds/Aye Meri Zohrajabeen.mp3') },
-  { id: 'oyehoye', name: '🔥 Oye Hoye Kya Baat Hai', src: encodeURI('/sounds/oye hoye kya.mp3') }
+  { id: 'bollywood', name: '🥁 Energetic Bollywood Track', src: '/sounds/Energetic Bollywood Track.mp3' },
+  { id: 'disco', name: '💃 Kisi Disco Me Jaye', src: '/sounds/kisi disco me jaye.mp3' },
+  { id: 'nacho', name: '🕺 Hil Hil Ke Nacho', src: '/sounds/Hil Hil ke Nacho Nacho.mp3' },
+  { id: 'zohrajabeen', name: '✨ Aye Meri Zohrajabeen', src: '/sounds/Aye Meri Zohrajabeen.mp3' },
+  { id: 'oyehoye', name: '🔥 Oye Hoye Kya Baat Hai', src: '/sounds/oye hoye kya.mp3' }
 ];
 
-// Full 22 Sounds Library for Main Alarm Ring
+// 22 Full Audio Library
 const DEFAULT_SOUNDS = [
   { id: 'america', name: '🎙️ America Kya Kehta Tha', type: 'audio', src: '/sounds/America Kya Kehta Tha.mp3', category: 'prank' },
   { id: 'baby_crying', name: '👶 Baby Crying Tears', type: 'audio', src: '/sounds/Baby Crying Tears.mp3', category: 'prank' },
@@ -62,11 +62,10 @@ export default function App() {
   const [alarmEnabled, setAlarmEnabled] = useState(true);
   const [volume, setVolume] = useState(75);
 
-  // Wake-Up Note Feature
   const [alarmNote, setAlarmNote] = useState('Gym & Morning Workout!');
   const [activeRingingNote, setActiveRingingNote] = useState('');
 
-  // Modular Verification Missions (4 Active)
+  // 4 Active Verification Missions
   const [enabledMissions, setEnabledMissions] = useState({
     math: true,
     eyes: true,
@@ -82,6 +81,7 @@ export default function App() {
   const [customAudioData, setCustomAudioData] = useState(null);
   const [isSoundSelectorOpen, setIsSoundSelectorOpen] = useState(false);
 
+  // 2-Page Tab Navigation (sleep vs alarms)
   const [activeTab, setActiveTab] = useState('sleep');
   const [syncStatus, setSyncStatus] = useState('synced');
 
@@ -718,7 +718,7 @@ export default function App() {
         recognition.start();
       } catch (err) {
         console.warn('Speech recognition could not start:', err);
-        setVoiceError('Could not start speech recognition. You can use the Skip button.');
+        setVoiceError('Could not start speech recognition. Use the Skip button.');
         stopMicrophoneEngine();
       }
     } else {
@@ -727,7 +727,7 @@ export default function App() {
     }
   };
 
-  // STEP 4: STRICT FULL-BODY DANCE MISSION (15-SECOND TIME WINDOW & RETRY LOOP)
+  // STEP 4: STRICT FULL-BODY DANCE MISSION (15-SECOND WINDOW & RETRY LOOP)
   const stopDanceEngine = () => {
     if (danceAnimRef.current) {
       cancelAnimationFrame(danceAnimRef.current);
@@ -756,6 +756,7 @@ export default function App() {
   };
 
   const startDanceRound = (trackToPlay = null) => {
+    // 1. Instantly mute background alarm tone
     stopMelodyLoop();
     setDanceFailed(false);
     setDanceTimeRemaining(15);
@@ -767,11 +768,19 @@ export default function App() {
       danceAudioRef.current.pause();
     }
 
+    // Direct, reliable audio player
     const audio = new Audio(targetSong.src);
     danceAudioRef.current = audio;
     audio.loop = true;
     audio.volume = Math.max(0.65, volume / 100);
-    audio.play().catch((err) => console.warn('Dance music play error:', err));
+    audio.play().catch((err) => {
+      console.warn('Dance music play error, using fallback:', err);
+      const fallbackAudio = new Audio(DANCE_PLAYLIST[0].src);
+      danceAudioRef.current = fallbackAudio;
+      fallbackAudio.loop = true;
+      fallbackAudio.volume = Math.max(0.65, volume / 100);
+      fallbackAudio.play().catch(() => {});
+    });
 
     if (danceTimerIntervalRef.current) clearInterval(danceTimerIntervalRef.current);
 
@@ -790,7 +799,7 @@ export default function App() {
           }
           setDanceFailed(true);
           setDanceStatus('⏰ 15s Time Up! Hit "Try Again" & dance faster!');
-          startMelodyLoop();
+          startMelodyLoop(); // Alarm dobara bajna shuru
         }
       }
     }, 1000);
@@ -810,6 +819,7 @@ export default function App() {
   };
 
   const startDanceMission = async () => {
+    stopMelodyLoop();
     const randomSong = DANCE_PLAYLIST[Math.floor(Math.random() * DANCE_PLAYLIST.length)];
     setCurrentDanceTrackId(randomSong.id);
     startDanceRound(randomSong);
@@ -944,7 +954,7 @@ export default function App() {
                 const avgHandMotion = handDeltas.length ? handDeltas.reduce((a, b) => a + b, 0) / handDeltas.length : 0;
                 const avgLowerBodyMotion = lowerBodyDeltas.length ? lowerBodyDeltas.reduce((a, b) => a + b, 0) / lowerBodyDeltas.length : 0;
 
-                // Anti-Cheat Condition: Must move lower body / torso AND hands simultaneously
+                // Anti-Cheat Condition:
                 if (avgLowerBodyMotion > 0.016 && avgHandMotion > 0.018) {
                   danceScoreRef.current = Math.min(100, danceScoreRef.current + 1.35);
                   setDanceStatus('🔥 Awesome Full Body Moves! Keep jumping!');
@@ -1124,7 +1134,7 @@ export default function App() {
     setNewAlarmCustomNote('');
   };
 
-  // Real-time Clock Monitor (Exact minute trigger)
+  // Real-time Clock Monitor
   useEffect(() => {
     const checkAlarmTime = () => {
       if (isRinging) return;
@@ -1185,24 +1195,58 @@ export default function App() {
     };
   }, [activeHandle, handleMove]);
 
-  // Exact Alignment Math
-  const radius = 94;
-  const centerCoord = 105;
-  const circumference = 2 * Math.PI * radius;
-  let arcSpanDeg = wakeAngle - bedAngle;
-  if (arcSpanDeg < 0) arcSpanDeg += 360;
-  const strokeDashoffset = circumference - (arcSpanDeg / 360) * circumference;
+  // Mini Calendar Helper for Page 1
+  const renderMiniCalendar = () => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const now = new Date();
+    const todayDay = now.getDay();
+    const todayDate = now.getDate();
 
-  const getPinPos = (angleDeg) => {
-    const rad = (angleDeg - 90) * (Math.PI / 180);
-    return {
-      x: centerCoord + radius * Math.cos(rad),
-      y: centerCoord + radius * Math.sin(rad)
-    };
+    const weekDates = [];
+    for (let i = -3; i <= 3; i++) {
+      const d = new Date();
+      d.setDate(todayDate + i);
+      weekDates.push({
+        dayName: days[d.getDay()],
+        dateNum: d.getDate(),
+        isToday: i === 0
+      });
+    }
+
+    return (
+      <div style={{
+        backgroundColor: '#1b0633',
+        border: '1px solid #37145b',
+        borderRadius: '16px',
+        padding: '8px 10px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        width: '100%',
+        boxSizing: 'border-box',
+        margin: '6px 0'
+      }}>
+        {weekDates.map((item, idx) => (
+          <div
+            key={idx}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              padding: '4px 6px',
+              borderRadius: '10px',
+              backgroundColor: item.isToday ? '#ff1b90' : 'transparent',
+              color: item.isToday ? '#fff' : '#8d72b2',
+              boxShadow: item.isToday ? '0 0 10px rgba(255, 27, 144, 0.6)' : 'none'
+            }}
+          >
+            <span style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' }}>{item.dayName}</span>
+            <span style={{ fontSize: '13px', fontWeight: 900, marginTop: '2px' }}>{item.dateNum}</span>
+          </div>
+        ))}
+      </div>
+    );
   };
 
-  const bedPos = getPinPos(bedAngle);
-  const wakePos = getPinPos(wakeAngle);
   const sleepDuration = calculateSleepDuration();
 
   const getSoundDisplayName = () => {
@@ -1215,8 +1259,8 @@ export default function App() {
 
   return (
     <div style={{
-      minHeight: '100vh',
-      width: '100%',
+      minHeight: '100dvh',
+      width: '100vw',
       backgroundColor: '#0a0214',
       display: 'flex',
       alignItems: 'center',
@@ -1443,7 +1487,7 @@ export default function App() {
               </div>
             )}
 
-            {/* STEP 3: STRICT VOICE PHRASE (WITH RE-ENABLED SKIP BUTTON) */}
+            {/* STEP 3: STRICT VOICE PHRASE */}
             {currentActiveStepName === 'voice' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
                 <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>Speak Exact Phrase!</h3>
@@ -1538,7 +1582,7 @@ export default function App() {
               </div>
             )}
 
-            {/* STEP 4: STRICT FULL-BODY DANCE MISSION (15-SEC CHALLENGE WITH TRY AGAIN) */}
+            {/* STEP 4: STRICT FULL-BODY DANCE MISSION */}
             {currentActiveStepName === 'dance' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                 <h3 style={{ fontSize: '18px', fontWeight: 900, margin: 0 }}>💃 Morning Dance Mission</h3>
@@ -1688,7 +1732,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Direct Dismiss only if user disabled all missions */}
             {activePipeline.length === 0 && (
               <div style={{ width: '100%', marginTop: '12px' }}>
                 <button
@@ -2141,28 +2184,23 @@ export default function App() {
         </div>
       )}
 
-      {/* ==================== RESPONSIVE PHONE FRAME ==================== */}
+      {/* ==================== 2-PAGE MOBILE CARD FRAME ==================== */}
       <div style={{
         width: '100%',
-        maxWidth: '380px',
-        height: '100vh',
-        maxHeight: '840px',
+        maxWidth: '410px',
+        minHeight: '100dvh',
         backgroundColor: '#120324',
-        border: '2px solid rgba(255, 27, 144, 0.2)',
-        borderRadius: '36px',
-        boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
-        padding: '24px 20px 16px 20px',
+        padding: '18px 18px 12px 18px',
         color: '#ffffff',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
         position: 'relative',
-        overflow: 'hidden',
         boxSizing: 'border-box'
       }}>
-        {/* TAB 1: SLEEP TIME */}
+        {/* ================= PAGE 1: SLEEP TIME ================= */}
         {activeTab === 'sleep' && (
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, justifyContent: 'space-between', flex: 1, overflowY: 'auto', position: 'relative', zIndex: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: '3px', opacity: 0.75 }}>
                 <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
@@ -2170,22 +2208,22 @@ export default function App() {
                 <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, letterSpacing: '0.4px' }}>CogniWake</h2>
+                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, letterSpacing: '0.4px' }}>CogniWake</h2>
                 {syncStatus === 'saving' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#f59e0b' }} />}
                 {syncStatus === 'synced' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }} />}
               </div>
               <span
                 onClick={() => triggerAlarmRing('CogniWake Mission', alarmNote)}
-                style={{ fontSize: '13px', color: '#ff1b90', fontWeight: 700, cursor: 'pointer' }}
+                style={{ fontSize: '13px', color: '#ff1b90', fontWeight: 800, cursor: 'pointer' }}
               >
                 Test Ring
               </span>
             </div>
 
             {/* Dial with Exact Center & Handle Math */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '14px', marginBottom: '14px' }}>
-              <div ref={dialRef} style={{ position: 'relative', width: '210px', height: '210px', display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none' }}>
-                <div style={{ position: 'absolute', inset: '11px', borderRadius: '50%', border: '12px solid #230a40', boxSizing: 'border-box' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '8px 0' }}>
+              <div ref={dialRef} style={{ position: 'relative', width: '190px', height: '190px', display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none' }}>
+                <div style={{ position: 'absolute', inset: '10px', borderRadius: '50%', border: '12px solid #230a40', boxSizing: 'border-box' }} />
 
                 <svg 
                   style={{ 
@@ -2194,10 +2232,10 @@ export default function App() {
                     width: '100%', 
                     height: '100%', 
                     transform: `rotate(${bedAngle - 90}deg)`, 
-                    transformOrigin: '105px 105px',
+                    transformOrigin: '95px 95px',
                     pointerEvents: 'none' 
                   }} 
-                  viewBox="0 0 210 210"
+                  viewBox="0 0 190 190"
                 >
                   <defs>
                     <linearGradient id="neonPink" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -2206,22 +2244,22 @@ export default function App() {
                     </linearGradient>
                   </defs>
                   <circle
-                    cx="105"
-                    cy="105"
-                    r={radius}
+                    cx="95"
+                    cy="95"
+                    r="84"
                     fill="none"
                     stroke="url(#neonPink)"
                     strokeWidth="12"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={strokeDashoffset}
+                    strokeDasharray={2 * Math.PI * 84}
+                    strokeDashoffset={(2 * Math.PI * 84) - (((wakeAngle - bedAngle + 360) % 360) / 360) * (2 * Math.PI * 84)}
                     strokeLinecap="round"
                     style={{ filter: 'drop-shadow(0 0 10px rgba(255, 27, 144, 0.9))' }}
                   />
                 </svg>
 
                 <div style={{
-                  width: '130px',
-                  height: '130px',
+                  width: '118px',
+                  height: '118px',
                   backgroundColor: '#ffffff',
                   borderRadius: '50%',
                   display: 'flex',
@@ -2232,13 +2270,13 @@ export default function App() {
                   boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.1)',
                   pointerEvents: 'none'
                 }}>
-                  <span style={{ position: 'absolute', top: '7px', fontSize: '10px', fontWeight: 800, color: '#666' }}>12</span>
-                  <span style={{ position: 'absolute', right: '9px', fontSize: '10px', fontWeight: 800, color: '#666' }}>3</span>
+                  <span style={{ position: 'absolute', top: '7px', fontSize: '9px', fontWeight: 800, color: '#666' }}>12</span>
+                  <span style={{ position: 'absolute', right: '9px', fontSize: '9px', fontWeight: 800, color: '#666' }}>3</span>
                   <span style={{ position: 'absolute', bottom: '7px', fontSize: '9px', fontWeight: 800, color: '#666' }}>▲</span>
-                  <span style={{ position: 'absolute', left: '9px', fontSize: '10px', fontWeight: 800, color: '#666' }}>9</span>
+                  <span style={{ position: 'absolute', left: '9px', fontSize: '9px', fontWeight: 800, color: '#666' }}>9</span>
 
-                  <div style={{ fontSize: '28px', fontWeight: 900, color: '#120324', lineHeight: 1, letterSpacing: '-0.5px' }}>
-                    {sleepDuration.hrs}<span style={{ fontSize: '14px', fontWeight: 700, color: '#555', marginLeft: '2px' }}>hr</span>
+                  <div style={{ fontSize: '26px', fontWeight: 900, color: '#120324', lineHeight: 1, letterSpacing: '-0.5px' }}>
+                    {sleepDuration.hrs}<span style={{ fontSize: '13px', fontWeight: 700, color: '#555', marginLeft: '2px' }}>hr</span>
                   </div>
                   <div style={{ fontSize: '11px', fontWeight: 600, color: '#888', marginTop: '2px' }}>
                     {sleepDuration.mins} min
@@ -2251,11 +2289,11 @@ export default function App() {
                   onTouchStart={() => setActiveHandle('bed')}
                   style={{
                     position: 'absolute',
-                    left: `${bedPos.x}px`,
-                    top: `${bedPos.y}px`,
+                    left: `${95 + 84 * Math.cos((bedAngle - 90) * (Math.PI / 180))}px`,
+                    top: `${95 + 84 * Math.sin((bedAngle - 90) * (Math.PI / 180))}px`,
                     transform: 'translate(-50%, -50%)',
-                    width: '24px',
-                    height: '24px',
+                    width: '22px',
+                    height: '22px',
                     borderRadius: '50%',
                     backgroundColor: '#ffffff',
                     border: '2px solid #ff1b90',
@@ -2276,11 +2314,11 @@ export default function App() {
                   onTouchStart={() => setActiveHandle('wake')}
                   style={{
                     position: 'absolute',
-                    left: `${wakePos.x}px`,
-                    top: `${wakePos.y}px`,
+                    left: `${95 + 84 * Math.cos((wakeAngle - 90) * (Math.PI / 180))}px`,
+                    top: `${95 + 84 * Math.sin((wakeAngle - 90) * (Math.PI / 180))}px`,
                     transform: 'translate(-50%, -50%)',
-                    width: '24px',
-                    height: '24px',
+                    width: '22px',
+                    height: '22px',
                     borderRadius: '50%',
                     backgroundColor: '#ff1b90',
                     border: '2px solid #ffffff',
@@ -2297,12 +2335,12 @@ export default function App() {
               </div>
 
               {/* Bedtime & Wake Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', width: '100%', marginTop: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%', marginTop: '10px' }}>
                 <div style={{
                   position: 'relative',
                   background: 'linear-gradient(135deg, #ff1a8c 0%, #c40b68 100%)',
                   padding: '12px 10px',
-                  borderRadius: '18px',
+                  borderRadius: '16px',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
@@ -2317,7 +2355,7 @@ export default function App() {
                   backgroundColor: '#1e0935',
                   border: '1px solid #37145b',
                   padding: '12px 10px',
-                  borderRadius: '18px',
+                  borderRadius: '16px',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center'
@@ -2328,8 +2366,11 @@ export default function App() {
               </div>
             </div>
 
+            {/* NEW: WEEKLY MINI CALENDAR STRIP */}
+            {renderMiniCalendar()}
+
             {/* Controls */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
               
               <div 
                 onClick={() => setIsMissionConfigOpen(true)}
@@ -2436,16 +2477,16 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: ALARMS LIST */}
+        {/* ================= PAGE 2: ALARMS LIST & SETTINGS ================= */}
         {activeTab === 'alarms' && (
-          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, justifyContent: 'space-between', flex: 1, overflowY: 'auto', position: 'relative', zIndex: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: '3px', opacity: 0.75 }}>
                 <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
                 <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
                 <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
               </div>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, letterSpacing: '0.4px' }}>Alarms</h2>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, letterSpacing: '0.4px' }}>Alarms</h2>
               <button
                 onClick={() => setIsAddModalOpen(true)}
                 style={{
@@ -2465,11 +2506,11 @@ export default function App() {
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '20px 0' }}>
-              <div style={{ position: 'relative', width: '120px', height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '14px 0' }}>
+              <div style={{ position: 'relative', width: '100px', height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div style={{
-                  width: '90px',
-                  height: '90px',
+                  width: '80px',
+                  height: '80px',
                   borderRadius: '50%',
                   background: 'linear-gradient(135deg, #fbcfe8 0%, #e879f9 50%, #c084fc 100%)',
                   boxShadow: '0 0 35px rgba(232, 121, 249, 0.65)',
@@ -2478,20 +2519,20 @@ export default function App() {
                 }}>
                   <div style={{ position: 'absolute', top: '16px', left: '20px', width: '18px', height: '18px', borderRadius: '50%', backgroundColor: 'rgba(217, 70, 239, 0.3)' }} />
                   <div style={{ position: 'absolute', bottom: '16px', right: '22px', width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(217, 70, 239, 0.25)' }} />
-                  <div style={{ position: 'absolute', top: '-15px', left: '-15px', width: '90px', height: '90px', borderRadius: '#120324' }} />
+                  <div style={{ position: 'absolute', top: '-15px', left: '-15px', width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#120324' }} />
                 </div>
               </div>
 
-              <span style={{ fontSize: '12px', color: '#8d72b2', fontWeight: 600, marginTop: '4px' }}>Sleep time</span>
-              <div style={{ fontSize: '26px', fontWeight: 900, letterSpacing: '-0.5px', marginTop: '2px' }}>
-                {sleepDuration.hrs}<span style={{ fontSize: '15px', fontWeight: 700, color: '#bbb' }}>hr</span> {sleepDuration.mins}<span style={{ fontSize: '15px', fontWeight: 700, color: '#bbb' }}>min</span>
+              <span style={{ fontSize: '11px', color: '#8d72b2', fontWeight: 600, marginTop: '4px' }}>Total Target Sleep</span>
+              <div style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.5px', marginTop: '2px' }}>
+                {sleepDuration.hrs}<span style={{ fontSize: '14px', fontWeight: 700, color: '#bbb' }}>hr</span> {sleepDuration.mins}<span style={{ fontSize: '14px', fontWeight: 700, color: '#bbb' }}>min</span>
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: '4px', paddingRight: '4px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#8d72b2' }}>Saved Alarms</span>
-                <span style={{ fontSize: '11px', color: '#ff1b90', fontWeight: 600, cursor: 'pointer' }} onClick={() => setIsAddModalOpen(true)}>+ Add</span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#8d72b2' }}>Configured Alarms</span>
+                <span style={{ fontSize: '11px', color: '#ff1b90', fontWeight: 800, cursor: 'pointer' }} onClick={() => setIsAddModalOpen(true)}>+ Add New</span>
               </div>
 
               {alarms.map((alarm) => (
@@ -2501,21 +2542,21 @@ export default function App() {
                     backgroundColor: '#1e0935',
                     border: '1px solid #37145b',
                     borderRadius: '16px',
-                    padding: '10px 14px',
+                    padding: '12px 14px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between'
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: '17px', fontWeight: 900, color: alarm.active ? '#ffffff' : '#73618a' }}>{alarm.time}</div>
+                    <div style={{ fontSize: '18px', fontWeight: 900, color: alarm.active ? '#ffffff' : '#73618a' }}>{alarm.time}</div>
                     <div style={{ fontSize: '10px', color: '#ff79c6', fontWeight: 700 }}>{alarm.note || alarm.label}</div>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {!alarm.isDialSync && (
                       <button onClick={() => deleteAlarm(alarm.id)} style={{ background: 'none', border: 'none', color: '#654f7a', cursor: 'pointer' }}>
-                        <Trash2 size={14} />
+                        <Trash2 size={15} />
                       </button>
                     )}
                     <div
@@ -2542,17 +2583,16 @@ export default function App() {
           </div>
         )}
 
-        {/* BOTTOM TABS */}
+        {/* ================= BOTTOM BAR (PAGE 1 & 2 SWITCHER) ================= */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-around',
           alignItems: 'center',
-          paddingTop: '12px',
+          paddingTop: '10px',
           borderTop: '1px solid #2b124a',
-          marginTop: '12px',
+          marginTop: '10px',
           position: 'relative',
-          zIndex: 5,
-          flexShrink: 0
+          zIndex: 5
         }}>
           <button
             onClick={() => setActiveTab('sleep')}
@@ -2567,7 +2607,7 @@ export default function App() {
               cursor: 'pointer'
             }}
           >
-            <Moon size={18} />
+            <Moon size={19} />
             <span style={{ fontSize: '11px', fontWeight: 700 }}>Sleep</span>
           </button>
           
@@ -2584,7 +2624,7 @@ export default function App() {
               cursor: 'pointer'
             }}
           >
-            <Bell size={18} />
+            <Bell size={19} />
             <span style={{ fontSize: '11px', fontWeight: 700 }}>Alarms</span>
           </button>
         </div>
