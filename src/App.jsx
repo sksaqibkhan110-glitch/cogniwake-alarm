@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   ChevronRight, Volume2, VolumeX, BellRing, Plus, Trash2, X, Check, 
-  RefreshCw, Moon, Bell, Camera, Mic, Upload, Music, Flame, FileText, Activity, Shuffle
+  RefreshCw, Moon, Bell, Camera, Mic, Upload, Music, Flame, FileText, Activity
 } from 'lucide-react';
 import { FilesetResolver, FaceLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { supabase } from './supabase';
 
-const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v11';
+const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v12';
 const USER_ID_KEY = 'cogniwake_user_uid_v1';
 const CUSTOM_AUDIO_KEY = 'cogniwake_custom_audio_cache_v1';
 
@@ -20,14 +20,14 @@ const WAKE_PHRASES = [
 
 // 5 Dedicated Bollywood Dance Tracks for Mission 4
 const DANCE_PLAYLIST = [
-  { id: 'bollywood', name: '🥁 Energetic Bollywood Track', src: '/sounds/Energetic Bollywood Track.mp3' },
-  { id: 'disco', name: '💃 Kisi Disco Me Jaye', src: '/sounds/kisi disco me jaye.mp3' },
-  { id: 'nacho', name: '🕺 Hil Hil Ke Nacho', src: '/sounds/Hil Hil ke Nacho Nacho.mp3' },
-  { id: 'zohrajabeen', name: '✨ Aye Meri Zohrajabeen', src: '/sounds/Aye Meri Zohrajabeen.mp3' },
-  { id: 'oyehoye', name: '🔥 Oye Hoye Kya Baat Hai', src: '/sounds/oye hoye kya.mp3' }
+  { id: 'bollywood', name: '🥁 Energetic Bollywood Track', src: encodeURI('/sounds/Energetic Bollywood Track.mp3') },
+  { id: 'disco', name: '💃 Kisi Disco Me Jaye', src: encodeURI('/sounds/kisi disco me jaye.mp3') },
+  { id: 'nacho', name: '🕺 Hil Hil Ke Nacho', src: encodeURI('/sounds/Hil Hil ke Nacho Nacho.mp3') },
+  { id: 'zohrajabeen', name: '✨ Aye Meri Zohrajabeen', src: encodeURI('/sounds/Aye Meri Zohrajabeen.mp3') },
+  { id: 'oyehoye', name: '🔥 Oye Hoye Kya Baat Hai', src: encodeURI('/sounds/oye hoye kya.mp3') }
 ];
 
-// Full 22 Sounds Library for Alarm Ring
+// Full 22 Sounds Library for Main Alarm Ring
 const DEFAULT_SOUNDS = [
   { id: 'america', name: '🎙️ America Kya Kehta Tha', type: 'audio', src: '/sounds/America Kya Kehta Tha.mp3', category: 'prank' },
   { id: 'baby_crying', name: '👶 Baby Crying Tears', type: 'audio', src: '/sounds/Baby Crying Tears.mp3', category: 'prank' },
@@ -62,12 +62,6 @@ export default function App() {
   const [alarmEnabled, setAlarmEnabled] = useState(true);
   const [volume, setVolume] = useState(75);
 
-  // Strict 1-Minute Snooze Control
-  const [strictSnoozeEnabled, setStrictSnoozeEnabled] = useState(false);
-  const [snoozeCountdown, setSnoozeCountdown] = useState(null);
-  const snoozeTimerRef = useRef(null);
-  const snoozeEndTimeRef = useRef(null);
-
   // Wake-Up Note Feature
   const [alarmNote, setAlarmNote] = useState('Gym & Morning Workout!');
   const [activeRingingNote, setActiveRingingNote] = useState('');
@@ -81,7 +75,7 @@ export default function App() {
   });
   const [isMissionConfigOpen, setIsMissionConfigOpen] = useState(false);
 
-  // Current Active Dance Track (Auto-shuffled or user chosen)
+  // Active Dance Song Selector
   const [currentDanceTrackId, setCurrentDanceTrackId] = useState('bollywood');
 
   const [selectedSound, setSelectedSound] = useState('chicken_screaming');
@@ -138,7 +132,7 @@ export default function App() {
   const micAnimRef = useRef(null);
   const manualStopRef = useRef(false);
 
-  // Step 4: Strict Full-Body Dance State & Refs
+  // Step 4: Strict Full-Body Dance Engine & 15-Sec Countdown Timer
   const danceVideoRef = useRef(null);
   const danceCanvasRef = useRef(null);
   const danceStreamRef = useRef(null);
@@ -149,6 +143,10 @@ export default function App() {
   const danceAnimRef = useRef(null);
   const danceScoreRef = useRef(0);
   const previousFullBodyLandmarksRef = useRef(null);
+
+  const [danceTimeRemaining, setDanceTimeRemaining] = useState(15);
+  const [danceFailed, setDanceFailed] = useState(false);
+  const danceTimerIntervalRef = useRef(null);
 
   // Audio Engine Refs
   const audioCtxRef = useRef(null);
@@ -239,9 +237,6 @@ export default function App() {
           if (Array.isArray(data.alarms) && data.alarms.length > 0) setAlarms(data.alarms);
           if (data.alarms_meta?.alarmNote) setAlarmNote(data.alarms_meta.alarmNote);
           if (data.alarms_meta?.enabledMissions) setEnabledMissions(data.alarms_meta.enabledMissions);
-          if (typeof data.alarms_meta?.strictSnoozeEnabled === 'boolean') {
-            setStrictSnoozeEnabled(data.alarms_meta.strictSnoozeEnabled);
-          }
           setSyncStatus('synced');
         } else {
           const localSaved = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -251,7 +246,6 @@ export default function App() {
             if (p.wakeAngle) setWakeAngle(p.wakeAngle);
             if (p.alarmNote) setAlarmNote(p.alarmNote);
             if (p.enabledMissions) setEnabledMissions(p.enabledMissions);
-            if (p.strictSnoozeEnabled !== undefined) setStrictSnoozeEnabled(p.strictSnoozeEnabled);
             if (p.volume) setVolume(p.volume);
             if (p.alarms) setAlarms(p.alarms);
           }
@@ -270,7 +264,7 @@ export default function App() {
     if (!isLoaded || !userIdRef.current) return;
 
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
-      bedAngle, wakeAngle, alarmEnabled, volume, alarms, alarmNote, enabledMissions, strictSnoozeEnabled
+      bedAngle, wakeAngle, alarmEnabled, volume, alarms, alarmNote, enabledMissions
     }));
 
     setSyncStatus('saving');
@@ -285,10 +279,9 @@ export default function App() {
             bed_angle: bedAngle,
             wake_angle: wakeAngle,
             alarm_enabled: alarmEnabled,
-            snooze_enabled: strictSnoozeEnabled,
             volume: volume,
             alarms: alarms,
-            alarms_meta: { alarmNote, enabledMissions, strictSnoozeEnabled },
+            alarms_meta: { alarmNote, enabledMissions },
             updated_at: new Date().toISOString()
           }, { onConflict: 'user_id' });
         setSyncStatus(!error ? 'synced' : 'offline');
@@ -300,7 +293,7 @@ export default function App() {
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [bedAngle, wakeAngle, alarmEnabled, volume, alarms, alarmNote, enabledMissions, strictSnoozeEnabled, isLoaded]);
+  }, [bedAngle, wakeAngle, alarmEnabled, volume, alarms, alarmNote, enabledMissions, isLoaded]);
 
   const handleVolumeChange = (newVal) => {
     const val = Number(newVal);
@@ -608,7 +601,7 @@ export default function App() {
     }
   }, [modelReady]);
 
-  // STEP 3: HIGH-ACCURACY VOICE RECOGNITION
+  // STEP 3: HIGH-ACCURACY VOICE RECOGNITION (WITH RE-ENABLED SKIP BUTTON)
   const stopMicrophoneEngine = () => {
     manualStopRef.current = true;
     setIsListening(false);
@@ -725,7 +718,7 @@ export default function App() {
         recognition.start();
       } catch (err) {
         console.warn('Speech recognition could not start:', err);
-        setVoiceError('Speech recognition could not start. Use the skip button below.');
+        setVoiceError('Could not start speech recognition. You can use the Skip button.');
         stopMicrophoneEngine();
       }
     } else {
@@ -734,7 +727,7 @@ export default function App() {
     }
   };
 
-  // STEP 4: STRICT FULL-BODY DANCE ENGINE (Full-screen Body + Knee/Leg Detection)
+  // STEP 4: STRICT FULL-BODY DANCE MISSION (15-SECOND TIME WINDOW & RETRY LOOP)
   const stopDanceEngine = () => {
     if (danceAnimRef.current) {
       cancelAnimationFrame(danceAnimRef.current);
@@ -751,6 +744,10 @@ export default function App() {
       danceAudioRef.current.pause();
       danceAudioRef.current.currentTime = 0;
     }
+    if (danceTimerIntervalRef.current) {
+      clearInterval(danceTimerIntervalRef.current);
+      danceTimerIntervalRef.current = null;
+    }
     if (danceCanvasRef.current) {
       const canvasContext = danceCanvasRef.current.getContext('2d');
       canvasContext?.clearRect(0, 0, danceCanvasRef.current.width, danceCanvasRef.current.height);
@@ -758,45 +755,64 @@ export default function App() {
     previousFullBodyLandmarksRef.current = null;
   };
 
+  const startDanceRound = (trackToPlay = null) => {
+    stopMelodyLoop();
+    setDanceFailed(false);
+    setDanceTimeRemaining(15);
+    danceScoreRef.current = 0;
+    setDanceProgress(0);
+
+    const targetSong = trackToPlay || DANCE_PLAYLIST.find(t => t.id === currentDanceTrackId) || DANCE_PLAYLIST[0];
+    if (danceAudioRef.current) {
+      danceAudioRef.current.pause();
+    }
+
+    const audio = new Audio(targetSong.src);
+    danceAudioRef.current = audio;
+    audio.loop = true;
+    audio.volume = Math.max(0.65, volume / 100);
+    audio.play().catch((err) => console.warn('Dance music play error:', err));
+
+    if (danceTimerIntervalRef.current) clearInterval(danceTimerIntervalRef.current);
+
+    let timeLeft = 15;
+    danceTimerIntervalRef.current = setInterval(() => {
+      timeLeft -= 1;
+      setDanceTimeRemaining(timeLeft);
+
+      if (timeLeft <= 0) {
+        clearInterval(danceTimerIntervalRef.current);
+        danceTimerIntervalRef.current = null;
+
+        if (danceScoreRef.current < 100) {
+          if (danceAudioRef.current) {
+            danceAudioRef.current.pause();
+          }
+          setDanceFailed(true);
+          setDanceStatus('⏰ 15s Time Up! Hit "Try Again" & dance faster!');
+          startMelodyLoop();
+        }
+      }
+    }, 1000);
+  };
+
+  const handleTryAgainDance = () => {
+    startDanceRound();
+  };
+
   const switchDanceSong = (newTrackId) => {
     const matched = DANCE_PLAYLIST.find(t => t.id === newTrackId);
     if (!matched) return;
     setCurrentDanceTrackId(newTrackId);
-
-    if (danceAudioRef.current) {
-      danceAudioRef.current.pause();
-      danceAudioRef.current.currentTime = 0;
+    if (!danceFailed) {
+      startDanceRound(matched);
     }
-    const nextAudio = new Audio(matched.src);
-    danceAudioRef.current = nextAudio;
-    nextAudio.loop = true;
-    nextAudio.volume = Math.max(0.65, volume / 100);
-    nextAudio.play().catch(() => {});
   };
 
   const startDanceMission = async () => {
-    danceScoreRef.current = 0;
-    setDanceProgress(0);
-    previousFullBodyLandmarksRef.current = null;
-
-    // AUTO-SHUFFLE: Har baar random new song chuna jayega
     const randomSong = DANCE_PLAYLIST[Math.floor(Math.random() * DANCE_PLAYLIST.length)];
     setCurrentDanceTrackId(randomSong.id);
-    setDanceStatus(`Playing: ${randomSong.name.split(' ')[1] || 'Bollywood Beat'}... Step Back!`);
-
-    if (danceAudioRef.current) {
-      danceAudioRef.current.pause();
-      danceAudioRef.current.currentTime = 0;
-    }
-    const danceAudio = new Audio(randomSong.src);
-    danceAudioRef.current = danceAudio;
-    danceAudio.loop = true;
-    danceAudio.volume = Math.max(0.65, volume / 100);
-    danceAudio.currentTime = 0;
-    danceAudio.play().catch((err) => {
-      console.warn('Dance music could not start:', err);
-      startMelodyLoop();
-    });
+    startDanceRound(randomSong);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -892,10 +908,7 @@ export default function App() {
             }
             canvasContext.shadowBlur = 0;
 
-            // STRICT FULL BODY CHECK:
-            // 1. Shoulders: 11, 12
-            // 2. Wrists/Hands: 15, 16
-            // 3. Knees/Legs: 25, 26 (User must step back from bed!)
+            // Strict Full-Body Verification:
             const shouldersVisible = pointIsVisible(11) && pointIsVisible(12);
             const handsVisible = pointIsVisible(15) || pointIsVisible(16);
             const legsVisible = pointIsVisible(25) || pointIsVisible(26) || pointIsVisible(23) || pointIsVisible(24);
@@ -907,7 +920,6 @@ export default function App() {
               setDanceStatus('🙌 Raise your arms and dance!');
               previousFullBodyLandmarksRef.current = null;
             } else {
-              // Full body in view! Track simultaneous hand AND leg/torso movement
               const trackedJoints = [11, 12, 15, 16, 23, 24, 25, 26].filter(pointIsVisible);
 
               const currentPoints = trackedJoints.map((idx) => ({
@@ -921,7 +933,6 @@ export default function App() {
               if (previousPoints) {
                 const prevMap = new Map(previousPoints.map((p) => [p.idx, p]));
                 
-                // Separate Upper body (hands) & Lower body (hips/knees)
                 const handDeltas = currentPoints
                   .filter(p => (p.idx === 15 || p.idx === 16) && prevMap.has(p.idx))
                   .map(p => Math.hypot(p.x - prevMap.get(p.idx).x, p.y - prevMap.get(p.idx).y));
@@ -933,15 +944,15 @@ export default function App() {
                 const avgHandMotion = handDeltas.length ? handDeltas.reduce((a, b) => a + b, 0) / handDeltas.length : 0;
                 const avgLowerBodyMotion = lowerBodyDeltas.length ? lowerBodyDeltas.reduce((a, b) => a + b, 0) / lowerBodyDeltas.length : 0;
 
-                // ANTI-CHEAT RULE: Must have lower body/torso movement > 0.016 (sitting and waving hands alone won't work!)
+                // Anti-Cheat Condition: Must move lower body / torso AND hands simultaneously
                 if (avgLowerBodyMotion > 0.016 && avgHandMotion > 0.018) {
-                  danceScoreRef.current = Math.min(100, danceScoreRef.current + 1.8);
+                  danceScoreRef.current = Math.min(100, danceScoreRef.current + 1.35);
                   setDanceStatus('🔥 Awesome Full Body Moves! Keep jumping!');
                 } else if (avgHandMotion > 0.02 && avgLowerBodyMotion <= 0.016) {
                   setDanceStatus('❌ Move your legs/hips too! Don\'t just wave hands!');
                   danceScoreRef.current = Math.max(0, danceScoreRef.current - 0.2);
                 } else {
-                  danceScoreRef.current = Math.max(0, danceScoreRef.current - 0.25);
+                  danceScoreRef.current = Math.max(0, danceScoreRef.current - 0.2);
                   setDanceStatus('💃 Step & dance to the beat!');
                 }
 
@@ -1011,12 +1022,6 @@ export default function App() {
   };
 
   const triggerAlarmRing = (info, note = '') => {
-    if (snoozeTimerRef.current) {
-      clearInterval(snoozeTimerRef.current);
-      snoozeTimerRef.current = null;
-      setSnoozeCountdown(null);
-    }
-
     setRingingAlarmInfo(info);
     setActiveRingingNote(note || alarmNote);
 
@@ -1044,34 +1049,6 @@ export default function App() {
     }
   };
 
-  // STRICT 1-MINUTE REAL COUNTDOWN SNOOZE (Bulletproof Timestamp Execution)
-  const handleStrictSnooze = () => {
-    stopMelodyLoop();
-    stopCamera();
-    stopMicrophoneEngine();
-    stopDanceEngine();
-    setIsRinging(false);
-
-    const ringTargetTime = Date.now() + 60 * 1000;
-    snoozeEndTimeRef.current = ringTargetTime;
-    setSnoozeCountdown(60);
-
-    if (snoozeTimerRef.current) clearInterval(snoozeTimerRef.current);
-
-    snoozeTimerRef.current = setInterval(() => {
-      const remainingSeconds = Math.max(0, Math.ceil((snoozeEndTimeRef.current - Date.now()) / 1000));
-      setSnoozeCountdown(remainingSeconds);
-
-      if (remainingSeconds <= 0) {
-        clearInterval(snoozeTimerRef.current);
-        snoozeTimerRef.current = null;
-        snoozeEndTimeRef.current = null;
-        setSnoozeCountdown(null);
-        triggerAlarmRing('Snooze Over (1 Min Ended)', activeRingingNote || alarmNote);
-      }
-    }, 1000);
-  };
-
   const finalizeAlarmDismissal = () => {
     stopMelodyLoop();
     stopCamera();
@@ -1087,12 +1064,6 @@ export default function App() {
     setOpenEyesProgress(0);
     setVoiceVolumeLevel(0);
     setDanceProgress(0);
-    if (snoozeTimerRef.current) {
-      clearInterval(snoozeTimerRef.current);
-      snoozeTimerRef.current = null;
-      snoozeEndTimeRef.current = null;
-      setSnoozeCountdown(null);
-    }
   };
 
   // Clock Angle Math
@@ -1257,26 +1228,6 @@ export default function App() {
       userSelect: 'none',
       overflowX: 'hidden'
     }}>
-
-      {/* SNOOZE ACTIVE TOP BANNER */}
-      {snoozeCountdown !== null && (
-        <div style={{
-          position: 'fixed',
-          top: '12px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          backgroundColor: '#ff1b90',
-          color: '#fff',
-          padding: '6px 16px',
-          borderRadius: '20px',
-          fontSize: '12px',
-          fontWeight: 800,
-          zIndex: 150,
-          boxShadow: '0 0 15px rgba(255, 27, 144, 0.8)'
-        }}>
-          ⏰ Snooze Ending In: {snoozeCountdown}s
-        </div>
-      )}
 
       {/* ==================== ACTIVE ALARM RINGING SCREEN ==================== */}
       {isRinging && (
@@ -1492,12 +1443,12 @@ export default function App() {
               </div>
             )}
 
-            {/* STEP 3: STRICT VOICE PHRASE */}
+            {/* STEP 3: STRICT VOICE PHRASE (WITH RE-ENABLED SKIP BUTTON) */}
             {currentActiveStepName === 'voice' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
                 <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>Speak Exact Phrase!</h3>
                 <p style={{ fontSize: '11px', color: '#c7a9e9', margin: 0 }}>
-                  Tap mic and speak this complete sentence:
+                  Tap mic and speak this complete sentence to proceed:
                 </p>
 
                 <div style={{
@@ -1544,12 +1495,12 @@ export default function App() {
                   disabled={isListening}
                   style={{
                     width: '100%',
-                    padding: '12px',
+                    padding: '14px',
                     borderRadius: '14px',
                     border: 'none',
                     background: isListening ? '#f59e0b' : 'linear-gradient(135deg, #ff1a8c, #c40b68)',
                     color: '#fff',
-                    fontSize: '14px',
+                    fontSize: '15px',
                     fontWeight: 800,
                     cursor: isListening ? 'default' : 'pointer',
                     display: 'flex',
@@ -1559,9 +1510,10 @@ export default function App() {
                     boxShadow: isListening ? '0 0 20px #f59e0b' : '0 8px 20px rgba(255,26,140,0.4)'
                   }}
                 >
-                  <Mic size={18} /> {isListening ? 'Listening... Speak Now!' : 'Tap Mic & Read Phrase'}
+                  <Mic size={18} /> {isListening ? 'Listening... Speak Sentence Now!' : 'Tap Mic & Read Phrase'}
                 </button>
 
+                {/* SKIP / FORCE COMPLETE BUTTON */}
                 <button
                   type="button"
                   onClick={() => {
@@ -1586,34 +1538,39 @@ export default function App() {
               </div>
             )}
 
-            {/* STEP 4: STRICT FULL-BODY DANCE MISSION WITH ON-SCREEN SONG SELECTOR */}
+            {/* STEP 4: STRICT FULL-BODY DANCE MISSION (15-SEC CHALLENGE WITH TRY AGAIN) */}
             {currentActiveStepName === 'dance' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                 <h3 style={{ fontSize: '18px', fontWeight: 900, margin: 0 }}>💃 Morning Dance Mission</h3>
-                
-                {/* ON-SCREEN SONG SELECTOR & SHUFFLE CHANGER */}
+
+                {/* 15S COUNTDOWN HEADER & SONG SELECTOR */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  backgroundColor: '#270e44',
-                  border: '1px solid #ff1b90',
-                  borderRadius: '12px',
-                  padding: '4px 8px',
+                  justifyContent: 'space-between',
                   width: '100%',
+                  backgroundColor: danceFailed ? '#ef4444' : '#270e44',
+                  border: danceFailed ? '1px solid #ef4444' : '1px solid #ff1b90',
+                  borderRadius: '12px',
+                  padding: '6px 10px',
                   boxSizing: 'border-box'
                 }}>
-                  <Music size={14} color="#ff1b90" style={{ flexShrink: 0 }} />
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#fff' }}>
+                    {danceFailed ? '🚨 15s Up! Alarm Ringing!' : `⏱️ Time Left: ${danceTimeRemaining}s`}
+                  </div>
+
                   <select
                     value={currentDanceTrackId}
                     onChange={(e) => switchDanceSong(e.target.value)}
+                    disabled={danceFailed}
                     style={{
-                      background: 'none',
-                      border: 'none',
+                      background: '#1b0633',
+                      border: '1px solid #ff1b90',
+                      borderRadius: '8px',
                       color: '#ffd0eb',
-                      fontSize: '11px',
+                      fontSize: '10px',
                       fontWeight: 700,
-                      width: '100%',
+                      padding: '2px 6px',
                       outline: 'none',
                       cursor: 'pointer'
                     }}
@@ -1687,7 +1644,9 @@ export default function App() {
 
                 <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700 }}>
-                    <span style={{ color: danceProgress > 70 ? '#10b981' : '#ff79c6' }}>{danceStatus}</span>
+                    <span style={{ color: danceFailed ? '#ef4444' : (danceProgress > 70 ? '#10b981' : '#ff79c6') }}>
+                      {danceStatus}
+                    </span>
                     <span>{danceProgress}%</span>
                   </div>
                   <div style={{ width: '100%', height: '8px', backgroundColor: '#270e44', borderRadius: '4px', overflow: 'hidden' }}>
@@ -1699,10 +1658,37 @@ export default function App() {
                     }} />
                   </div>
                 </div>
+
+                {/* TRY AGAIN BUTTON */}
+                {danceFailed && (
+                  <button
+                    type="button"
+                    onClick={handleTryAgainDance}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      borderRadius: '14px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #10b981, #059669)',
+                      color: '#fff',
+                      fontSize: '14px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      boxShadow: '0 8px 20px rgba(16, 185, 129, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      marginTop: '4px'
+                    }}
+                  >
+                    <RefreshCw size={16} /> Try Again (Pause Alarm & Dance)
+                  </button>
+                )}
               </div>
             )}
 
-            {/* Direct Dismiss if no missions enabled */}
+            {/* Direct Dismiss only if user disabled all missions */}
             {activePipeline.length === 0 && (
               <div style={{ width: '100%', marginTop: '12px' }}>
                 <button
@@ -1722,27 +1708,6 @@ export default function App() {
                   Dismiss Alarm
                 </button>
               </div>
-            )}
-
-            {strictSnoozeEnabled && (
-              <button
-                type="button"
-                onClick={handleStrictSnooze}
-                style={{
-                  width: '100%',
-                  padding: '9px',
-                  borderRadius: '12px',
-                  border: '1px solid #37145b',
-                  backgroundColor: '#270e44',
-                  color: '#c7a9e9',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  marginTop: '10px'
-                }}
-              >
-                Strict Snooze (1 Min Only)
-              </button>
             )}
           </div>
         </div>
@@ -1859,7 +1824,7 @@ export default function App() {
               border: enabledMissions.dance ? '1px solid #ff1b90' : '1px solid #3d1768'
             }}>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 800 }}>💃 4. Morning Dance (10s)</div>
+                <div style={{ fontSize: '13px', fontWeight: 800 }}>💃 4. Morning Dance (15s)</div>
                 <div style={{ fontSize: '10px', color: '#8d72b2' }}>Full body movement & auto song</div>
               </div>
               <input
@@ -2464,33 +2429,6 @@ export default function App() {
                     boxShadow: '0 0 8px rgba(255, 27, 144, 0.8)',
                     pointerEvents: 'none'
                   }} />
-                </div>
-              </div>
-
-              {/* Strict 1-Minute Snooze */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#e0d5ed' }}>Strict Snooze</div>
-                  <div style={{ fontSize: '10px', color: '#8d72b2' }}>Only 1-min extra sleep</div>
-                </div>
-                <div
-                  onClick={() => setStrictSnoozeEnabled(!strictSnoozeEnabled)}
-                  style={{
-                    width: '42px',
-                    height: '24px',
-                    borderRadius: '12px',
-                    backgroundColor: strictSnoozeEnabled ? '#ff1b90' : '#270e44',
-                    boxShadow: strictSnoozeEnabled ? '0 0 10px rgba(255, 27, 144, 0.6)' : 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '2px',
-                    boxSizing: 'border-box',
-                    cursor: 'pointer',
-                    justifyContent: strictSnoozeEnabled ? 'flex-end' : 'flex-start',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
                 </div>
               </div>
 
