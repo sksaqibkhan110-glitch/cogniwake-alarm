@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   ChevronRight, Volume2, VolumeX, BellRing, Plus, Trash2, X, Check, 
-  RefreshCw, Moon, Bell, Camera, Mic, Upload, Music, Flame, FileText, Activity, Sparkles, Calendar, BookOpen, Layers
+  RefreshCw, Moon, Bell, Camera, Mic, Upload, Music, Flame, FileText, Activity,
+  Play, Pause, RotateCcw, Leaf, Sun, BarChart2, Compass, Sliders, Sparkles, Clock, Flag
 } from 'lucide-react';
 import { FilesetResolver, FaceLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { supabase } from './supabase';
 
-const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v15';
+const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v18_mint';
 const USER_ID_KEY = 'cogniwake_user_uid_v1';
 const CUSTOM_AUDIO_KEY = 'cogniwake_custom_audio_cache_v1';
 
@@ -27,7 +28,7 @@ const DANCE_PLAYLIST = [
   { id: 'oyehoye', name: '🔥 Oye Hoye Kya Baat Hai', src: '/sounds/oye hoye kya.mp3' }
 ];
 
-// Full 22 Sounds Library
+// 22 Default Sounds
 const DEFAULT_SOUNDS = [
   { id: 'america', name: '🎙️ America Kya Kehta Tha', type: 'audio', src: '/sounds/America Kya Kehta Tha.mp3', category: 'prank' },
   { id: 'baby_crying', name: '👶 Baby Crying Tears', type: 'audio', src: '/sounds/Baby Crying Tears.mp3', category: 'prank' },
@@ -42,7 +43,7 @@ const DEFAULT_SOUNDS = [
   { id: 'modi_kids', name: '🧒 MODI MODI Kids', type: 'audio', src: '/sounds/MODI MODI, MODI MODI Kids.mp3', category: 'prank' },
   { id: 'sad_bgm', name: '🎻 Sad Music BGM India', type: 'audio', src: '/sounds/Sad Music BGM India Ver.mp3', category: 'prank' },
 
-  { id: 'melodian', name: '🎵 Melodian (Default)', type: 'synth', category: 'default' },
+  { id: 'melodian', name: '🎵 Melodian Chime', type: 'synth', category: 'default' },
   { id: 'bells', name: '🔔 Gentle Morning Bells', type: 'synth', category: 'default' },
   { id: 'cyber', name: '⚡ Cyber Synth Pulse', type: 'synth', category: 'default' },
   { id: 'digital', name: '⏰ Classic Digital Beep', type: 'synth', category: 'default' },
@@ -56,8 +57,8 @@ const DEFAULT_SOUNDS = [
 ];
 
 export default function App() {
-  const [bedAngle, setBedAngle] = useState(0);
-  const [wakeAngle, setWakeAngle] = useState(165);
+  const [bedAngle, setBedAngle] = useState(300); // ~10:00 PM default
+  const [wakeAngle, setWakeAngle] = useState(182.5); // ~06:05 AM default (8h 05m)
 
   const [alarmEnabled, setAlarmEnabled] = useState(true);
   const [volume, setVolume] = useState(75);
@@ -65,6 +66,7 @@ export default function App() {
   const [alarmNote, setAlarmNote] = useState('Gym & Morning Workout!');
   const [activeRingingNote, setActiveRingingNote] = useState('');
 
+  // 4 Active Verification Missions
   const [enabledMissions, setEnabledMissions] = useState({
     math: true,
     eyes: true,
@@ -74,17 +76,16 @@ export default function App() {
   const [isMissionConfigOpen, setIsMissionConfigOpen] = useState(false);
 
   const [currentDanceTrackId, setCurrentDanceTrackId] = useState('bollywood');
-
   const [selectedSound, setSelectedSound] = useState('chicken_screaming');
   const [customAudioData, setCustomAudioData] = useState(null);
   const [isSoundSelectorOpen, setIsSoundSelectorOpen] = useState(false);
 
-  // 2-Page Navigation
+  // 4 Bottom Tabs: 'sleep', 'timer', 'stopwatch', 'alarms'
   const [activeTab, setActiveTab] = useState('sleep');
   const [syncStatus, setSyncStatus] = useState('synced');
 
   const [alarms, setAlarms] = useState([
-    { id: 1, time: '05.30', label: 'Sat, Sun', note: 'Morning Jogging', active: true, isDialSync: true },
+    { id: 1, time: '06.05', label: 'Sat, Sun', note: 'Morning Jogging', active: true, isDialSync: true },
     { id: 2, time: '07.00', label: 'Weekdays', note: 'College & Work Day', active: true, isDialSync: false },
   ]);
 
@@ -101,6 +102,22 @@ export default function App() {
   const [pipelineIndex, setPipelineIndex] = useState(0);
   const activePipelineRef = useRef([]);
   const pipelineIndexRef = useRef(0);
+
+  // ------------------ COUNTDOWN TIMER STATE & CUSTOM PICKER ------------------
+  const [timerDuration, setTimerDuration] = useState(25 * 60);
+  const [timerSecondsLeft, setTimerSecondsLeft] = useState(25 * 60);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [isCustomTimerModalOpen, setIsCustomTimerModalOpen] = useState(false);
+  const [customTimerHours, setCustomTimerHours] = useState('1');
+  const [customTimerMins, setCustomTimerMins] = useState('0');
+  const timerIntervalRef = useRef(null);
+
+  // ------------------ STOPWATCH / STUDY TRACKER STATE ------------------
+  const [stopwatchTime, setStopwatchTime] = useState(0);
+  const [isStopwatchRunning, setIsStopwatchRunning] = useState(false);
+  const [laps, setLaps] = useState([]);
+  const stopwatchIntervalRef = useRef(null);
+  const stopwatchStartTimeRef = useRef(0);
 
   // Step 1: Math
   const [mathProblem, setMathProblem] = useState({ question: '', answer: 0 });
@@ -130,7 +147,7 @@ export default function App() {
   const micAnimRef = useRef(null);
   const manualStopRef = useRef(false);
 
-  // Step 4: Strict Full-Body Dance Engine & 15-Sec Countdown Timer
+  // Step 4: Full-Body Dance Engine & 15-Sec Countdown Timer
   const danceVideoRef = useRef(null);
   const danceCanvasRef = useRef(null);
   const danceStreamRef = useRef(null);
@@ -292,6 +309,113 @@ export default function App() {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [bedAngle, wakeAngle, alarmEnabled, volume, alarms, alarmNote, enabledMissions, isLoaded]);
+
+  // Timer Countdown Logic
+  useEffect(() => {
+    if (isTimerRunning) {
+      timerIntervalRef.current = setInterval(() => {
+        setTimerSecondsLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(timerIntervalRef.current);
+            setIsTimerRunning(false);
+            triggerAlarmRing('Focus Timer Completed!', 'Time to stretch and rest!');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+    }
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, [isTimerRunning]);
+
+  const handleSetTimerPreset = (mins) => {
+    setIsTimerRunning(false);
+    setTimerDuration(mins * 60);
+    setTimerSecondsLeft(mins * 60);
+  };
+
+  const handleApplyCustomTimer = (e) => {
+    e.preventDefault();
+    const hrs = parseInt(customTimerHours, 10) || 0;
+    const mins = parseInt(customTimerMins, 10) || 0;
+    const totalSecs = (hrs * 3600) + (mins * 60);
+    if (totalSecs > 0) {
+      setIsTimerRunning(false);
+      setTimerDuration(totalSecs);
+      setTimerSecondsLeft(totalSecs);
+      setIsCustomTimerModalOpen(false);
+    }
+  };
+
+  const handleToggleTimer = () => {
+    if (timerSecondsLeft === 0) {
+      setTimerSecondsLeft(timerDuration);
+    }
+    setIsTimerRunning(!isTimerRunning);
+  };
+
+  const handleResetTimer = () => {
+    setIsTimerRunning(false);
+    setTimerSecondsLeft(timerDuration);
+  };
+
+  const formatTimerDisplay = (seconds) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  // ------------------ STOPWATCH LOGIC ------------------
+  useEffect(() => {
+    if (isStopwatchRunning) {
+      stopwatchStartTimeRef.current = Date.now() - stopwatchTime;
+      stopwatchIntervalRef.current = setInterval(() => {
+        setStopwatchTime(Date.now() - stopwatchStartTimeRef.current);
+      }, 30);
+    } else if (stopwatchIntervalRef.current) {
+      clearInterval(stopwatchIntervalRef.current);
+    }
+    return () => {
+      if (stopwatchIntervalRef.current) clearInterval(stopwatchIntervalRef.current);
+    };
+  }, [isStopwatchRunning]);
+
+  const handleToggleStopwatch = () => {
+    setIsStopwatchRunning(!isStopwatchRunning);
+  };
+
+  const handleResetStopwatch = () => {
+    setIsStopwatchRunning(false);
+    setStopwatchTime(0);
+    setLaps([]);
+  };
+
+  const handleAddLap = () => {
+    if (stopwatchTime > 0) {
+      setLaps((prev) => [{ id: prev.length + 1, time: stopwatchTime }, ...prev]);
+    }
+  };
+
+  const formatStopwatchDisplay = (ms) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const centiseconds = Math.floor((ms % 1000) / 10);
+
+    if (hours > 0) {
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(centiseconds).padStart(2, '0')}`;
+    }
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(centiseconds).padStart(2, '0')}`;
+  };
 
   const handleVolumeChange = (newVal) => {
     const val = Number(newVal);
@@ -538,11 +662,11 @@ export default function App() {
 
                 if (isLeftOpen && isRightOpen) {
                   eyesOpenDurationRef.current += 1.8;
-                  setEyesOpenStatus('Both Eyes Open! Keep looking...');
+                  setEyesOpenStatus('Both Eyes Open! Looking great...');
                 } else {
                   eyesOpenDurationRef.current = Math.max(0, eyesOpenDurationRef.current - 1.5);
                   if (!isLeftOpen && !isRightOpen) {
-                    setEyesOpenStatus('Eyes Closed! Open both!');
+                    setEyesOpenStatus('Eyes Closed! Open wide!');
                   } else {
                     setEyesOpenStatus('Open BOTH Eyes completely!');
                   }
@@ -558,7 +682,7 @@ export default function App() {
                   return;
                 }
               } else {
-                setEyesOpenStatus('Face not centered. Look at camera!');
+                setEyesOpenStatus('Face not centered. Look at lens!');
               }
             } catch (err) {
               console.warn("Detection frame error:", err);
@@ -716,7 +840,7 @@ export default function App() {
         recognition.start();
       } catch (err) {
         console.warn('Speech recognition could not start:', err);
-        setVoiceError('Could not start speech recognition. Use the Skip button.');
+        setVoiceError('Could not start speech recognition. Use Skip button.');
         stopMicrophoneEngine();
       }
     } else {
@@ -896,12 +1020,12 @@ export default function App() {
               };
             };
 
-            // Neon Mint Glow Skeleton Overlay
+            // Sage Mint Skeleton
             canvasContext.lineWidth = 4;
             canvasContext.lineCap = 'round';
-            canvasContext.strokeStyle = '#a495ff';
-            canvasContext.shadowColor = '#8070ff';
-            canvasContext.shadowBlur = 10;
+            canvasContext.strokeStyle = '#4e7a5e';
+            canvasContext.shadowColor = '#6b8a76';
+            canvasContext.shadowBlur = 8;
 
             for (const [start, end] of connections) {
               if (!pointIsVisible(start) || !pointIsVisible(end)) continue;
@@ -1128,7 +1252,7 @@ export default function App() {
     setNewAlarmCustomNote('');
   };
 
-  // Clock Monitor
+  // Real-time Clock Monitor
   useEffect(() => {
     const checkAlarmTime = () => {
       if (isRinging) return;
@@ -1146,6 +1270,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, [alarms, isRinging, enabledMissions, alarmNote]);
 
+  // Real 8-Hour Optimal Sleep Math
   const calculateSleepDuration = useCallback(() => {
     let diffDeg = wakeAngle - bedAngle;
     if (diffDeg < 0) diffDeg += 360;
@@ -1154,7 +1279,15 @@ export default function App() {
     let mins = totalMinutes % 60;
     mins = Math.round(mins / 5) * 5;
     if (mins === 60) { mins = 0; hrs += 1; }
-    return { hrs: String(hrs).padStart(2, '0'), mins: String(mins).padStart(2, '0') };
+
+    const sleepPercent = Math.min(100, Math.round((totalMinutes / 480) * 100));
+
+    return { 
+      hrs: String(hrs).padStart(2, '0'), 
+      mins: String(mins).padStart(2, '0'),
+      totalMinutes,
+      score: sleepPercent
+    };
   }, [bedAngle, wakeAngle]);
 
   const handleMove = useCallback((clientX, clientY) => {
@@ -1189,53 +1322,6 @@ export default function App() {
     };
   }, [activeHandle, handleMove]);
 
-  // Aesthetic Weekly Score Strip (Matches Screenshot)
-  const renderWeeklyConsistencyPills = () => {
-    const daysData = [
-      { day: 'M', score: '82%' },
-      { day: 'T', score: '78%' },
-      { day: 'W', score: '54%' },
-      { day: 'T', score: '84%' },
-      { day: 'F', score: '78%' },
-      { day: 'S', score: '98%', active: true },
-      { day: 'S', score: '--' }
-    ];
-
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        width: '100%',
-        margin: '12px 0 16px 0',
-        padding: '0 2px'
-      }}>
-        {daysData.map((d, i) => (
-          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
-            <div style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              backgroundColor: d.active ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.05)',
-              border: d.active ? '1px solid rgba(255, 255, 255, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
-              boxShadow: d.active ? '0 0 16px rgba(255, 255, 255, 0.35)' : 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '11px',
-              fontWeight: 800,
-              color: d.active ? '#ffffff' : '#7d8396'
-            }}>
-              {d.score}
-            </div>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: d.active ? '#ffffff' : '#575c6e' }}>
-              {d.day}
-            </span>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
   const sleepDuration = calculateSleepDuration();
 
   const getSoundDisplayName = () => {
@@ -1246,29 +1332,140 @@ export default function App() {
 
   const currentActiveStepName = activePipeline[pipelineIndex] || null;
 
+  // Real Dynamic Day Calculation (0 = SUN, 1 = MON, ... 6 = SAT)
+  const currentDayIndex = new Date().getDay();
+
+  // Clean Neumorphic Box Shadows
+  const cardShadow = '10px 10px 24px #d8dacd, -10px -10px 24px #ffffff';
+  const insetCardShadow = 'inset 5px 5px 12px #d8dacd, inset -5px -5px 12px #ffffff';
+
   return (
     <div style={{
       minHeight: '100dvh',
       width: '100vw',
-      background: 'radial-gradient(circle at 50% 15%, #181b29 0%, #0a0b10 100%)',
+      backgroundColor: '#f1f3ea',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       margin: 0,
       padding: 0,
-      fontFamily: '"Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+      fontFamily: '"Plus Jakarta Sans", sans-serif',
       boxSizing: 'border-box',
       userSelect: 'none',
-      color: '#ffffff'
+      color: '#274736'
     }}>
+
+      {/* ==================== CUSTOM TIMER DURATION MODAL ==================== */}
+      {isCustomTimerModalOpen && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(39, 71, 54, 0.45)',
+          backdropFilter: 'blur(16px)',
+          zIndex: 130,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px'
+        }}>
+          <form
+            onSubmit={handleApplyCustomTimer}
+            style={{
+              width: '100%',
+              maxWidth: '320px',
+              backgroundColor: '#f1f3ea',
+              borderRadius: '28px',
+              padding: '24px',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontFamily: '"Playfair Display", serif', margin: 0, fontSize: '18px', fontWeight: 600 }}>Custom Timer Duration</h3>
+              <X size={20} color="#687e71" cursor="pointer" onClick={() => setIsCustomTimerModalOpen(false)} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: '#687e71', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Hours</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="23"
+                  value={customTimerHours}
+                  onChange={(e) => setCustomTimerHours(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '14px',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #b7c0b0',
+                    color: '#274736',
+                    fontSize: '18px',
+                    boxSizing: 'border-box',
+                    textAlign: 'center',
+                    fontWeight: 600,
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', color: '#687e71', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Minutes</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="59"
+                  value={customTimerMins}
+                  onChange={(e) => setCustomTimerMins(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '14px',
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #b7c0b0',
+                    color: '#274736',
+                    fontSize: '18px',
+                    boxSizing: 'border-box',
+                    textAlign: 'center',
+                    fontWeight: 600,
+                    outline: 'none'
+                  }}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              style={{
+                width: '100%',
+                padding: '13px',
+                borderRadius: '16px',
+                border: 'none',
+                backgroundColor: '#274736',
+                color: '#ffffff',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                marginTop: '6px',
+                boxShadow: '0 8px 18px rgba(39, 71, 54, 0.3)'
+              }}
+            >
+              Set Timer
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* ==================== ACTIVE ALARM RINGING SCREEN ==================== */}
       {isRinging && (
         <div style={{
           position: 'fixed',
           inset: 0,
-          backgroundColor: 'rgba(5, 6, 10, 0.94)',
-          backdropFilter: 'blur(20px)',
+          backgroundColor: 'rgba(39, 71, 54, 0.45)',
+          backdropFilter: 'blur(16px)',
           zIndex: 100,
           display: 'flex',
           alignItems: 'center',
@@ -1279,20 +1476,19 @@ export default function App() {
             boxSizing: 'border-box',
             width: '100%',
             maxWidth: '380px',
-            backgroundColor: 'rgba(23, 26, 38, 0.85)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
+            backgroundColor: '#f1f3ea',
             borderRadius: '34px',
+            boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            boxShadow: '0 25px 70px rgba(0, 0, 0, 0.8)',
             textAlign: 'center',
-            color: '#fff',
             position: 'relative',
             maxHeight: 'calc(100dvh - 24px)',
             overflowY: 'auto',
             overscrollBehavior: 'contain',
-            padding: '24px 20px'
+            padding: '24px 20px',
+            border: '1px solid rgba(255, 255, 255, 0.6)'
           }}>
             {activePipeline.length > 0 && (
               <div style={{ display: 'flex', gap: '8px', width: '100%', justifyContent: 'center', marginBottom: '14px' }}>
@@ -1303,7 +1499,7 @@ export default function App() {
                       flex: 1,
                       height: '4px',
                       borderRadius: '2px',
-                      backgroundColor: idx <= pipelineIndex ? '#ffffff' : 'rgba(255,255,255,0.1)'
+                      backgroundColor: idx <= pipelineIndex ? '#274736' : '#d2d6c6'
                     }}
                   />
                 ))}
@@ -1313,8 +1509,8 @@ export default function App() {
             {activeRingingNote && (
               <div style={{
                 width: '100%',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                backgroundColor: '#e6eae0',
+                boxShadow: insetCardShadow,
                 borderRadius: '18px',
                 padding: '12px 14px',
                 boxSizing: 'border-box',
@@ -1324,12 +1520,12 @@ export default function App() {
                 gap: '10px',
                 textAlign: 'left'
               }}>
-                <FileText size={20} color="#a495ff" style={{ flexShrink: 0 }} />
+                <FileText size={20} color="#274736" style={{ flexShrink: 0 }} />
                 <div>
-                  <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#8b92a8', fontWeight: 700, letterSpacing: '0.6px' }}>
-                    Wake-Up Intent
+                  <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#687e71', fontWeight: 600, letterSpacing: '0.6px' }}>
+                    Morning Goal
                   </div>
-                  <div style={{ fontSize: '13px', fontWeight: 800, color: '#fff', lineHeight: 1.2 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#274736', lineHeight: 1.2 }}>
                     "{activeRingingNote}"
                   </div>
                 </div>
@@ -1337,36 +1533,35 @@ export default function App() {
             )}
 
             <div style={{
-              width: '52px',
-              height: '52px',
+              width: '54px',
+              height: '54px',
               borderRadius: '50%',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
+              backgroundColor: '#274736',
+              boxShadow: '0 10px 20px rgba(39, 71, 54, 0.35)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 0 30px rgba(255, 255, 255, 0.15)',
-              marginBottom: '8px'
+              marginBottom: '10px'
             }}>
               <BellRing size={24} color="#ffffff" />
             </div>
 
-            <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.5px', color: '#8b92a8', fontWeight: 800 }}>
+            <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.5px', color: '#687e71', fontWeight: 600 }}>
               {activePipeline.length > 0 ? `Mission ${pipelineIndex + 1} of ${activePipeline.length}` : 'Alarm Ringing'}
             </span>
 
             {/* STEP 1: MATH */}
             {currentActiveStepName === 'math' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
-                <h3 style={{ fontSize: '20px', fontWeight: 800, margin: 0 }}>Solve Math Problem</h3>
-                <p style={{ fontSize: '11px', color: '#82889c', margin: 0 }}>
-                  Wake up your analytical brain!
+                <h3 style={{ fontFamily: '"Playfair Display", serif', fontSize: '24px', fontWeight: 600, margin: 0 }}>Solve Problem</h3>
+                <p style={{ fontSize: '11px', color: '#687e71', margin: 0 }}>
+                  Wake up your focus to silence alarm
                 </p>
 
                 <form onSubmit={handleVerifyMath} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                    border: mathError ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.1)',
+                    backgroundColor: '#e6eae0',
+                    boxShadow: insetCardShadow,
                     borderRadius: '20px',
                     padding: '16px',
                     display: 'flex',
@@ -1375,15 +1570,15 @@ export default function App() {
                     gap: '10px'
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '28px', fontWeight: 900, letterSpacing: '2px', color: '#fff' }}>
+                      <span style={{ fontFamily: '"Playfair Display", serif', fontSize: '32px', fontWeight: 700, color: '#274736' }}>
                         {mathProblem.question} = ?
                       </span>
                       <button
                         type="button"
                         onClick={generateMathMission}
-                        style={{ background: 'none', border: 'none', color: '#82889c', cursor: 'pointer' }}
+                        style={{ background: 'none', border: 'none', color: '#687e71', cursor: 'pointer' }}
                       >
-                        <RefreshCw size={14} />
+                        <RefreshCw size={15} />
                       </button>
                     </div>
 
@@ -1398,33 +1593,34 @@ export default function App() {
                         textAlign: 'center',
                         padding: '10px',
                         borderRadius: '14px',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        backgroundColor: 'rgba(0,0,0,0.4)',
-                        color: '#fff',
+                        border: '1px solid #c8cdc0',
+                        backgroundColor: '#ffffff',
+                        color: '#274736',
                         fontSize: '18px',
-                        fontWeight: 800,
+                        fontWeight: 600,
                         outline: 'none'
                       }}
                     />
-                    {mathError && <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: 600 }}>Incorrect answer!</span>}
+                    {mathError && <span style={{ fontSize: '11px', color: '#c2410c', fontWeight: 600 }}>Incorrect answer!</span>}
                   </div>
 
                   <button
                     type="submit"
                     style={{
                       width: '100%',
-                      padding: '13px',
-                      borderRadius: '16px',
+                      padding: '14px',
+                      borderRadius: '18px',
                       border: 'none',
-                      backgroundColor: '#ffffff',
-                      color: '#000000',
+                      backgroundColor: '#274736',
+                      color: '#ffffff',
                       fontSize: '14px',
-                      fontWeight: 800,
+                      fontWeight: 600,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '6px'
+                      gap: '6px',
+                      boxShadow: '0 8px 18px rgba(39, 71, 54, 0.3)'
                     }}
                   >
                     Submit Answer <ChevronRight size={16} />
@@ -1436,8 +1632,8 @@ export default function App() {
             {/* STEP 2: BOTH EYES */}
             {currentActiveStepName === 'eyes' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
-                <h3 style={{ fontSize: '20px', fontWeight: 800, margin: 0 }}>Open Both Eyes</h3>
-                <p style={{ fontSize: '11px', color: '#82889c', margin: 0 }}>
+                <h3 style={{ fontFamily: '"Playfair Display", serif', fontSize: '24px', fontWeight: 600, margin: 0 }}>Open Both Eyes</h3>
+                <p style={{ fontSize: '11px', color: '#687e71', margin: 0 }}>
                   Hold both eyes open for 1.5 seconds
                 </p>
 
@@ -1447,8 +1643,8 @@ export default function App() {
                   height: '170px',
                   borderRadius: '50%',
                   overflow: 'hidden',
-                  border: openEyesProgress > 60 ? '3px solid #10b981' : '2px solid rgba(255, 255, 255, 0.2)',
-                  boxShadow: openEyesProgress > 60 ? '0 0 30px rgba(16, 185, 129, 0.5)' : 'none',
+                  border: openEyesProgress > 60 ? '3px solid #274736' : '3px solid #b7c0b0',
+                  boxShadow: cardShadow,
                   backgroundColor: '#000'
                 }}>
                   <video
@@ -1461,15 +1657,15 @@ export default function App() {
                 </div>
 
                 <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700 }}>
-                    <span style={{ color: openEyesProgress > 70 ? '#10b981' : '#8b92a8' }}>{eyesOpenStatus}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 600, color: '#274736' }}>
+                    <span>{eyesOpenStatus}</span>
                     <span>{openEyesProgress}%</span>
                   </div>
-                  <div style={{ width: '100%', height: '7px', backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ width: '100%', height: '8px', backgroundColor: '#d5dacf', borderRadius: '4px', overflow: 'hidden' }}>
                     <div style={{
                       width: `${openEyesProgress}%`,
                       height: '100%',
-                      backgroundColor: openEyesProgress > 70 ? '#10b981' : '#ffffff',
+                      backgroundColor: '#274736',
                       transition: 'width 0.1s linear'
                     }} />
                   </div>
@@ -1480,35 +1676,35 @@ export default function App() {
             {/* STEP 3: STRICT VOICE PHRASE */}
             {currentActiveStepName === 'voice' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
-                <h3 style={{ fontSize: '20px', fontWeight: 800, margin: 0 }}>Speak Exact Phrase</h3>
-                <p style={{ fontSize: '11px', color: '#82889c', margin: 0 }}>
+                <h3 style={{ fontFamily: '"Playfair Display", serif', fontSize: '24px', fontWeight: 600, margin: 0 }}>Speak Exact Phrase</h3>
+                <p style={{ fontSize: '11px', color: '#687e71', margin: 0 }}>
                   Read this affirmation aloud clearly:
                 </p>
 
                 <div style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  backgroundColor: '#e6eae0',
+                  boxShadow: insetCardShadow,
                   borderRadius: '18px',
                   padding: '14px',
                   width: '100%',
                   boxSizing: 'border-box'
                 }}>
-                  <span style={{ fontSize: '14px', fontWeight: 800, color: '#ffffff', fontStyle: 'italic', lineHeight: 1.4 }}>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#274736', fontStyle: 'italic', lineHeight: 1.4 }}>
                     "{targetVoicePhrase}"
                   </span>
                 </div>
 
                 {isListening && (
                   <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#82889c', fontWeight: 600 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#687e71', fontWeight: 600 }}>
                       <span>Mic Sound Level</span>
                       <span>{voiceVolumeLevel}%</span>
                     </div>
-                    <div style={{ width: '100%', height: '5px', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: '100%', height: '6px', backgroundColor: '#d5dacf', borderRadius: '3px', overflow: 'hidden' }}>
                       <div style={{
                         width: `${voiceVolumeLevel}%`,
                         height: '100%',
-                        backgroundColor: '#ffffff',
+                        backgroundColor: '#274736',
                         transition: 'width 0.05s ease'
                       }} />
                     </div>
@@ -1516,12 +1712,12 @@ export default function App() {
                 )}
 
                 {transcript && (
-                  <div style={{ fontSize: '12px', color: '#82889c' }}>
-                    Heard: <strong style={{ color: '#fff' }}>"{transcript}"</strong>
+                  <div style={{ fontSize: '12px', color: '#687e71' }}>
+                    Heard: <strong style={{ color: '#274736' }}>"{transcript}"</strong>
                   </div>
                 )}
 
-                {voiceError && <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: 600 }}>{voiceError}</span>}
+                {voiceError && <span style={{ fontSize: '11px', color: '#c2410c', fontWeight: 600 }}>{voiceError}</span>}
 
                 <button
                   type="button"
@@ -1529,18 +1725,19 @@ export default function App() {
                   disabled={isListening}
                   style={{
                     width: '100%',
-                    padding: '13px',
-                    borderRadius: '16px',
+                    padding: '14px',
+                    borderRadius: '18px',
                     border: 'none',
-                    backgroundColor: isListening ? '#f59e0b' : '#ffffff',
-                    color: '#000000',
+                    backgroundColor: isListening ? '#d97706' : '#274736',
+                    color: '#ffffff',
                     fontSize: '14px',
-                    fontWeight: 800,
+                    fontWeight: 600,
                     cursor: isListening ? 'default' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '8px'
+                    gap: '8px',
+                    boxShadow: '0 8px 18px rgba(39, 71, 54, 0.3)'
                   }}
                 >
                   <Mic size={16} /> {isListening ? 'Listening... Speak Now!' : 'Tap Mic & Read Phrase'}
@@ -1556,11 +1753,11 @@ export default function App() {
                     width: '100%',
                     padding: '12px',
                     borderRadius: '16px',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                    color: '#ffffff',
+                    border: '1px solid #b7c0b0',
+                    backgroundColor: '#eef0e6',
+                    color: '#274736',
                     fontSize: '13px',
-                    fontWeight: 700,
+                    fontWeight: 600,
                     cursor: 'pointer'
                   }}
                 >
@@ -1572,7 +1769,7 @@ export default function App() {
             {/* STEP 4: STRICT FULL-BODY DANCE MISSION */}
             {currentActiveStepName === 'dance' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>Morning Dance Mission</h3>
+                <h3 style={{ fontFamily: '"Playfair Display", serif', fontSize: '22px', fontWeight: 600, margin: 0 }}>Morning Dance</h3>
 
                 {/* 15S Countdown & Audio Switcher Header */}
                 <div style={{
@@ -1580,14 +1777,14 @@ export default function App() {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   width: '100%',
-                  backgroundColor: danceFailed ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                  border: danceFailed ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.1)',
+                  backgroundColor: danceFailed ? '#fecaca' : '#e6eae0',
+                  boxShadow: insetCardShadow,
                   borderRadius: '14px',
-                  padding: '6px 10px',
+                  padding: '6px 12px',
                   boxSizing: 'border-box'
                 }}>
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#fff' }}>
-                    {danceFailed ? '🚨 Time Up! Alarm Ringing!' : `⏱️ Time Left: ${danceTimeRemaining}s`}
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: danceFailed ? '#b91c1c' : '#274736' }}>
+                    {danceFailed ? '🚨 15s Up! Alarm Ringing!' : `⏱️ Time Left: ${danceTimeRemaining}s`}
                   </div>
 
                   <select
@@ -1595,19 +1792,19 @@ export default function App() {
                     onChange={(e) => switchDanceSong(e.target.value)}
                     disabled={danceFailed}
                     style={{
-                      background: '#161924',
-                      border: '1px solid rgba(255,255,255,0.15)',
+                      background: '#ffffff',
+                      border: '1px solid #b7c0b0',
                       borderRadius: '8px',
-                      color: '#fff',
+                      color: '#274736',
                       fontSize: '10px',
-                      fontWeight: 700,
+                      fontWeight: 600,
                       padding: '3px 6px',
                       outline: 'none',
                       cursor: 'pointer'
                     }}
                   >
                     {DANCE_PLAYLIST.map((trk) => (
-                      <option key={trk.id} value={trk.id} style={{ backgroundColor: '#161924', color: '#fff' }}>
+                      <option key={trk.id} value={trk.id}>
                         {trk.name}
                       </option>
                     ))}
@@ -1621,8 +1818,8 @@ export default function App() {
                   maxHeight: '40svh',
                   borderRadius: '26px',
                   overflow: 'hidden',
-                  border: danceProgress > 70 ? '2px solid #10b981' : '1px solid rgba(255, 255, 255, 0.15)',
-                  boxShadow: danceProgress > 70 ? '0 0 35px rgba(16, 185, 129, 0.5)' : 'none',
+                  border: danceProgress > 70 ? '3px solid #274736' : '2px solid #b7c0b0',
+                  boxShadow: cardShadow,
                   backgroundColor: '#000'
                 }}>
                   <video
@@ -1644,14 +1841,14 @@ export default function App() {
                     position: 'absolute',
                     top: '8px',
                     right: '8px',
-                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    backgroundColor: 'rgba(0,0,0,0.65)',
                     padding: '4px 8px',
                     borderRadius: '12px',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
                     fontSize: '10px',
-                    fontWeight: 800,
+                    fontWeight: 600,
                     color: '#ffffff'
                   }}>
                     <Activity size={12} color="#ffffff" />
@@ -1660,17 +1857,15 @@ export default function App() {
                 </div>
 
                 <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700 }}>
-                    <span style={{ color: danceFailed ? '#ef4444' : (danceProgress > 70 ? '#10b981' : '#8b92a8') }}>
-                      {danceStatus}
-                    </span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 600, color: '#274736' }}>
+                    <span>{danceStatus}</span>
                     <span>{danceProgress}%</span>
                   </div>
-                  <div style={{ width: '100%', height: '7px', backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ width: '100%', height: '8px', backgroundColor: '#d5dacf', borderRadius: '4px', overflow: 'hidden' }}>
                     <div style={{
                       width: `${danceProgress}%`,
                       height: '100%',
-                      backgroundColor: danceProgress > 70 ? '#10b981' : '#ffffff',
+                      backgroundColor: '#274736',
                       transition: 'width 0.15s ease'
                     }} />
                   </div>
@@ -1686,16 +1881,17 @@ export default function App() {
                       padding: '12px',
                       borderRadius: '16px',
                       border: 'none',
-                      backgroundColor: '#ffffff',
-                      color: '#000000',
+                      backgroundColor: '#274736',
+                      color: '#ffffff',
                       fontSize: '14px',
-                      fontWeight: 800,
+                      fontWeight: 600,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '8px',
-                      marginTop: '4px'
+                      marginTop: '4px',
+                      boxShadow: '0 8px 18px rgba(39, 71, 54, 0.3)'
                     }}
                   >
                     <RefreshCw size={16} /> Try Again (Pause Alarm & Dance)
@@ -1710,14 +1906,15 @@ export default function App() {
                   onClick={finalizeAlarmDismissal}
                   style={{
                     width: '100%',
-                    padding: '13px',
-                    borderRadius: '16px',
+                    padding: '14px',
+                    borderRadius: '18px',
                     border: 'none',
-                    backgroundColor: '#ffffff',
-                    color: '#000000',
+                    backgroundColor: '#274736',
+                    color: '#ffffff',
                     fontSize: '14px',
-                    fontWeight: 800,
-                    cursor: 'pointer'
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    boxShadow: '0 8px 18px rgba(39, 71, 54, 0.3)'
                   }}
                 >
                   Dismiss Alarm
@@ -1728,12 +1925,12 @@ export default function App() {
         </div>
       )}
 
-      {/* ==================== MISSION CUSTOMIZER MODAL ==================== */}
+      {/* ==================== MISSION CUSTOMIZER MODAL (MATCHES CLEAN TEXT STYLE) ==================== */}
       {isMissionConfigOpen && (
         <div style={{
           position: 'fixed',
           inset: 0,
-          backgroundColor: 'rgba(5, 6, 10, 0.85)',
+          backgroundColor: 'rgba(39, 71, 54, 0.45)',
           backdropFilter: 'blur(16px)',
           zIndex: 120,
           display: 'flex',
@@ -1744,46 +1941,44 @@ export default function App() {
           <div style={{
             width: '100%',
             maxWidth: '330px',
-            backgroundColor: '#161924',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            backgroundColor: '#f1f3ea',
             borderRadius: '30px',
             padding: '24px',
-            boxShadow: '0 25px 60px rgba(0,0,0,0.7)',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.25)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
-            color: '#fff'
+            gap: '12px'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Flame size={18} color="#ffffff" />
-                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800 }}>Wake-Up Missions</h3>
+                <Leaf size={18} color="#274736" />
+                <h3 style={{ fontFamily: '"Playfair Display", serif', margin: 0, fontSize: '18px', fontWeight: 600 }}>Missions Config</h3>
               </div>
-              <X size={20} color="#7d8396" cursor="pointer" onClick={() => setIsMissionConfigOpen(false)} />
+              <X size={20} color="#687e71" cursor="pointer" onClick={() => setIsMissionConfigOpen(false)} />
             </div>
 
-            <p style={{ fontSize: '11px', color: '#7d8396', margin: 0 }}>
-              Select which verification missions must be cleared to dismiss alarm:
+            <p style={{ fontSize: '11px', color: '#687e71', margin: 0 }}>
+              Select morning disciplines to unlock alarm:
             </p>
 
             <div style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: 'rgba(255, 255, 255, 0.04)',
+              backgroundColor: '#e6eae0',
+              boxShadow: insetCardShadow,
               padding: '10px 14px',
-              borderRadius: '16px',
-              border: enabledMissions.math ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid rgba(255, 255, 255, 0.05)'
+              borderRadius: '16px'
             }}>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 800 }}>🧮 1. Math Challenge</div>
-                <div style={{ fontSize: '10px', color: '#7d8396' }}>Arithmetic calculation</div>
+                <div style={{ fontSize: '13px', fontWeight: 600 }}>🧮 1. Math Challenge</div>
+                <div style={{ fontSize: '10px', color: '#687e71' }}>Mental sharpness</div>
               </div>
               <input
                 type="checkbox"
                 checked={enabledMissions.math}
                 onChange={(e) => setEnabledMissions({ ...enabledMissions, math: e.target.checked })}
-                style={{ width: '18px', height: '18px', accentColor: '#ffffff', cursor: 'pointer' }}
+                style={{ width: '18px', height: '18px', accentColor: '#274736', cursor: 'pointer' }}
               />
             </div>
 
@@ -1791,20 +1986,20 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: 'rgba(255, 255, 255, 0.04)',
+              backgroundColor: '#e6eae0',
+              boxShadow: insetCardShadow,
               padding: '10px 14px',
-              borderRadius: '16px',
-              border: enabledMissions.eyes ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid rgba(255, 255, 255, 0.05)'
+              borderRadius: '16px'
             }}>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 800 }}>👁️ 2. Both Eyes Open AI</div>
-                <div style={{ fontSize: '10px', color: '#7d8396' }}>Eyes open for 1.5s</div>
+                <div style={{ fontSize: '13px', fontWeight: 600 }}>👁️ 2. Both Eyes Open AI</div>
+                <div style={{ fontSize: '10px', color: '#687e71' }}>1.5s visual focus</div>
               </div>
               <input
                 type="checkbox"
                 checked={enabledMissions.eyes}
                 onChange={(e) => setEnabledMissions({ ...enabledMissions, eyes: e.target.checked })}
-                style={{ width: '18px', height: '18px', accentColor: '#ffffff', cursor: 'pointer' }}
+                style={{ width: '18px', height: '18px', accentColor: '#274736', cursor: 'pointer' }}
               />
             </div>
 
@@ -1812,20 +2007,20 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: 'rgba(255, 255, 255, 0.04)',
+              backgroundColor: '#e6eae0',
+              boxShadow: insetCardShadow,
               padding: '10px 14px',
-              borderRadius: '16px',
-              border: enabledMissions.voice ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid rgba(255, 255, 255, 0.05)'
+              borderRadius: '16px'
             }}>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 800 }}>🎙️ 3. Voice Passphrase</div>
-                <div style={{ fontSize: '10px', color: '#7d8396' }}>Speaks phrase to dismiss</div>
+                <div style={{ fontSize: '13px', fontWeight: 600 }}>🎙️ 3. Voice Affirmation</div>
+                <div style={{ fontSize: '10px', color: '#687e71' }}>Speak loud & clear</div>
               </div>
               <input
                 type="checkbox"
                 checked={enabledMissions.voice}
                 onChange={(e) => setEnabledMissions({ ...enabledMissions, voice: e.target.checked })}
-                style={{ width: '18px', height: '18px', accentColor: '#ffffff', cursor: 'pointer' }}
+                style={{ width: '18px', height: '18px', accentColor: '#274736', cursor: 'pointer' }}
               />
             </div>
 
@@ -1833,20 +2028,20 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: 'rgba(255, 255, 255, 0.04)',
+              backgroundColor: '#e6eae0',
+              boxShadow: insetCardShadow,
               padding: '10px 14px',
-              borderRadius: '16px',
-              border: enabledMissions.dance ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid rgba(255, 255, 255, 0.05)'
+              borderRadius: '16px'
             }}>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 800 }}>💃 4. Morning Dance (15s)</div>
-                <div style={{ fontSize: '10px', color: '#7d8396' }}>Full body jump & Bollywood beat</div>
+                <div style={{ fontSize: '13px', fontWeight: 600 }}>💃 4. Morning Dance (15s)</div>
+                <div style={{ fontSize: '10px', color: '#687e71' }}>Step back & full jump</div>
               </div>
               <input
                 type="checkbox"
                 checked={enabledMissions.dance}
                 onChange={(e) => setEnabledMissions({ ...enabledMissions, dance: e.target.checked })}
-                style={{ width: '18px', height: '18px', accentColor: '#ffffff', cursor: 'pointer' }}
+                style={{ width: '18px', height: '18px', accentColor: '#274736', cursor: 'pointer' }}
               />
             </div>
 
@@ -1857,12 +2052,13 @@ export default function App() {
                 padding: '12px',
                 borderRadius: '16px',
                 border: 'none',
-                backgroundColor: '#ffffff',
-                color: '#000000',
+                backgroundColor: '#274736',
+                color: '#ffffff',
                 fontSize: '14px',
-                fontWeight: 800,
+                fontWeight: 600,
                 cursor: 'pointer',
-                marginTop: '4px'
+                marginTop: '4px',
+                boxShadow: '0 8px 18px rgba(39, 71, 54, 0.3)'
               }}
             >
               Save Configuration
@@ -1876,7 +2072,7 @@ export default function App() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          backgroundColor: 'rgba(5, 6, 10, 0.85)',
+          backgroundColor: 'rgba(39, 71, 54, 0.45)',
           backdropFilter: 'blur(16px)',
           zIndex: 110,
           display: 'flex',
@@ -1887,41 +2083,39 @@ export default function App() {
           <div style={{
             width: '100%',
             maxWidth: '330px',
-            backgroundColor: '#161924',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            backgroundColor: '#f1f3ea',
             borderRadius: '30px',
             padding: '22px',
-            boxShadow: '0 25px 60px rgba(0,0,0,0.7)',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.25)',
             display: 'flex',
             flexDirection: 'column',
             gap: '12px',
-            color: '#fff',
             maxHeight: '85vh',
             overflowY: 'auto'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Music size={18} color="#ffffff" />
-                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800 }}>Alarm Sound</h3>
+                <Music size={18} color="#274736" />
+                <h3 style={{ fontFamily: '"Playfair Display", serif', margin: 0, fontSize: '18px', fontWeight: 600 }}>Alarm Tone</h3>
               </div>
-              <X size={20} color="#7d8396" cursor="pointer" onClick={() => setIsSoundSelectorOpen(false)} />
+              <X size={20} color="#687e71" cursor="pointer" onClick={() => setIsSoundSelectorOpen(false)} />
             </div>
 
             <div style={{
-              border: '1px dashed rgba(255, 255, 255, 0.25)',
+              border: '2px dashed #b7c0b0',
               borderRadius: '16px',
               padding: '12px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: 'rgba(255, 255, 255, 0.03)',
+              backgroundColor: '#e6eae0',
               cursor: 'pointer'
             }}
             onClick={() => fileInputRef.current?.click()}
             >
-              <Upload size={18} color="#ffffff" />
-              <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>
+              <Upload size={18} color="#274736" />
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#274736' }}>
                 {customAudioData ? 'Change Custom Song' : '+ Upload Your Own MP3'}
               </span>
               <input
@@ -1939,13 +2133,13 @@ export default function App() {
                 style={{
                   padding: '10px 14px',
                   borderRadius: '14px',
-                  backgroundColor: selectedSound === 'custom' ? '#ffffff' : 'rgba(255,255,255,0.05)',
-                  color: selectedSound === 'custom' ? '#000000' : '#ffffff',
+                  backgroundColor: selectedSound === 'custom' ? '#274736' : '#e6eae0',
+                  color: selectedSound === 'custom' ? '#ffffff' : '#274736',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  fontWeight: 700,
+                  fontWeight: 600,
                   fontSize: '13px'
                 }}
               >
@@ -1954,19 +2148,19 @@ export default function App() {
               </div>
             )}
 
-            <div style={{ fontSize: '10px', color: '#7d8396', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', marginTop: '4px' }}>
-              Prank & Viral Sounds
+            <div style={{ fontSize: '10px', color: '#687e71', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px', marginTop: '4px' }}>
+              Sound Library
             </div>
 
-            {DEFAULT_SOUNDS.filter(s => s.category === 'prank').map((sound) => (
+            {DEFAULT_SOUNDS.map((sound) => (
               <div
                 key={sound.id}
                 onClick={() => handleSelectSound(sound.id)}
                 style={{
                   padding: '10px 14px',
                   borderRadius: '14px',
-                  backgroundColor: selectedSound === sound.id ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                  border: selectedSound === sound.id ? '1px solid rgba(255, 255, 255, 0.3)' : '1px solid transparent',
+                  backgroundColor: selectedSound === sound.id ? '#274736' : '#e6eae0',
+                  color: selectedSound === sound.id ? '#ffffff' : '#274736',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -1988,7 +2182,7 @@ export default function App() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          backgroundColor: 'rgba(5, 6, 10, 0.85)',
+          backgroundColor: 'rgba(39, 71, 54, 0.45)',
           backdropFilter: 'blur(16px)',
           zIndex: 90,
           display: 'flex',
@@ -2001,24 +2195,22 @@ export default function App() {
             style={{
               width: '100%',
               maxWidth: '320px',
-              backgroundColor: '#161924',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              backgroundColor: '#f1f3ea',
               borderRadius: '28px',
               padding: '24px',
-              boxShadow: '0 25px 60px rgba(0,0,0,0.7)',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.25)',
               display: 'flex',
               flexDirection: 'column',
-              gap: '14px',
-              color: '#fff'
+              gap: '14px'
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>New Alarm</h3>
-              <X size={20} color="#7d8396" cursor="pointer" onClick={() => setIsAddModalOpen(false)} />
+              <h3 style={{ fontFamily: '"Playfair Display", serif', margin: 0, fontSize: '18px', fontWeight: 600 }}>New Alarm</h3>
+              <X size={20} color="#687e71" cursor="pointer" onClick={() => setIsAddModalOpen(false)} />
             </div>
 
             <div>
-              <label style={{ fontSize: '11px', color: '#7d8396', display: 'block', marginBottom: '6px' }}>Time</label>
+              <label style={{ fontSize: '11px', color: '#687e71', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Time</label>
               <input
                 type="time"
                 value={newAlarmTime}
@@ -2028,56 +2220,59 @@ export default function App() {
                   width: '100%',
                   padding: '10px 12px',
                   borderRadius: '14px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#fff',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #b7c0b0',
+                  color: '#274736',
                   fontSize: '16px',
                   boxSizing: 'border-box',
-                  outline: 'none'
+                  outline: 'none',
+                  fontWeight: 600
                 }}
               />
             </div>
 
             <div>
-              <label style={{ fontSize: '11px', color: '#7d8396', display: 'block', marginBottom: '6px' }}>Label / Days</label>
+              <label style={{ fontSize: '11px', color: '#687e71', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Days / Frequency</label>
               <input
                 type="text"
-                placeholder="e.g. Work, Gym, Sat-Sun"
+                placeholder="e.g. Workdays, Mon-Fri"
                 value={newAlarmLabel}
                 onChange={(e) => setNewAlarmLabel(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
                   borderRadius: '14px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#fff',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #b7c0b0',
+                  color: '#274736',
                   fontSize: '13px',
                   boxSizing: 'border-box',
-                  outline: 'none'
+                  outline: 'none',
+                  fontWeight: 600
                 }}
               />
             </div>
 
             <div>
-              <label style={{ fontSize: '11px', color: '#ffffff', display: 'block', marginBottom: '6px', fontWeight: 700 }}>
+              <label style={{ fontSize: '11px', color: '#274736', display: 'block', marginBottom: '6px', fontWeight: 600 }}>
                 Wake-Up Purpose / Reason
               </label>
               <input
                 type="text"
-                placeholder="e.g. 7 AM Flight / Gym session"
+                placeholder="e.g. Gym workout / Flight at 8 AM"
                 value={newAlarmCustomNote}
                 onChange={(e) => setNewAlarmCustomNote(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
                   borderRadius: '14px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#fff',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #274736',
+                  color: '#274736',
                   fontSize: '13px',
                   boxSizing: 'border-box',
-                  outline: 'none'
+                  outline: 'none',
+                  fontWeight: 600
                 }}
               />
             </div>
@@ -2089,12 +2284,13 @@ export default function App() {
                 padding: '12px',
                 borderRadius: '16px',
                 border: 'none',
-                backgroundColor: '#ffffff',
-                color: '#000000',
+                backgroundColor: '#274736',
+                color: '#ffffff',
                 fontSize: '14px',
-                fontWeight: 800,
+                fontWeight: 600,
                 cursor: 'pointer',
-                marginTop: '6px'
+                marginTop: '6px',
+                boxShadow: '0 8px 18px rgba(39, 71, 54, 0.3)'
               }}
             >
               Add Alarm
@@ -2103,84 +2299,74 @@ export default function App() {
         </div>
       )}
 
-      {/* ==================== MAIN ULTRA-AESTHETIC CARD CONTAINER ==================== */}
+      {/* ==================== PHONE CARD CONTAINER (MAX 410px) ==================== */}
       <div style={{
         width: '100%',
         maxWidth: '410px',
         minHeight: '100dvh',
-        backgroundColor: '#0c0e15',
-        padding: '24px 20px 16px 20px',
-        color: '#ffffff',
+        backgroundColor: '#f1f3ea',
+        padding: '20px 18px 14px 18px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
         position: 'relative',
         boxSizing: 'border-box'
       }}>
-        {/* ================= PAGE 1: SLEEP TIME ================= */}
+
+        {/* ================= PAGE 1: SLEEP / WAKE DIAL ================= */}
         {activeTab === 'sleep' && (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
             
-            {/* Top Bar (Matches Screenshot) */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, letterSpacing: '-0.5px' }}>
-                  Good evening
-                </h2>
-                <span style={{ fontSize: '12px', color: '#7d8396', fontWeight: 600 }}>
-                  Sunday, 25 Oct
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  onClick={() => setIsMissionConfigOpen(true)}
-                  style={{
-                    width: '38px',
-                    height: '38px',
-                    borderRadius: '12px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <Calendar size={17} />
-                </button>
-                <button
-                  onClick={() => triggerAlarmRing('CogniWake Mission', alarmNote)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '12px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    color: '#fff',
-                    fontSize: '11px',
-                    fontWeight: 800,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Test Ring
-                </button>
-              </div>
+            <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+              <h1 style={{
+                fontFamily: '"Playfair Display", serif',
+                margin: 0,
+                fontSize: '24px',
+                fontWeight: 700,
+                letterSpacing: '1.5px',
+                color: '#274736'
+              }}>
+                MINT / MODE
+              </h1>
+              <span style={{ fontSize: '10px', color: '#687e71', fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase' }}>
+                Sleep Rhythms & Recovery
+              </span>
             </div>
 
-            {/* Central Glow Sphere & Sleep Dial */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '14px 0' }}>
+            {/* Neumorphic Dial Box */}
+            <div style={{
+              backgroundColor: '#f1f3ea',
+              borderRadius: '34px',
+              boxShadow: cardShadow,
+              padding: '18px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              position: 'relative',
+              marginBottom: '12px'
+            }}>
+              <div style={{ position: 'absolute', top: '14px', left: '16px', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#e5e9de', boxShadow: cardShadow, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Leaf size={15} color="#274736" />
+              </div>
+              <div style={{ position: 'absolute', top: '14px', right: '16px', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#e5e9de', boxShadow: cardShadow, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                onClick={() => triggerAlarmRing('CogniWake Mission', alarmNote)}
+              >
+                <BarChart2 size={15} color="#274736" style={{ cursor: 'pointer' }} />
+              </div>
+
+              {/* Central Dial */}
               <div ref={dialRef} style={{
                 position: 'relative',
-                width: '230px',
-                height: '230px',
+                width: '180px',
+                height: '180px',
                 borderRadius: '50%',
-                background: 'radial-gradient(circle at 50% 30%, #202438 0%, #12141e 80%)',
-                boxShadow: '0 0 50px rgba(139, 122, 255, 0.12), inset 0 0 20px rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                backgroundColor: '#f1f3ea',
+                boxShadow: insetCardShadow,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                touchAction: 'none'
+                touchAction: 'none',
+                marginTop: '6px'
               }}>
                 <svg 
                   style={{ 
@@ -2189,61 +2375,45 @@ export default function App() {
                     width: '100%', 
                     height: '100%', 
                     transform: `rotate(${bedAngle - 90}deg)`, 
-                    transformOrigin: '115px 115px',
+                    transformOrigin: '90px 90px',
                     pointerEvents: 'none' 
                   }} 
-                  viewBox="0 0 230 230"
+                  viewBox="0 0 180 180"
                 >
-                  <defs>
-                    <linearGradient id="moonGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#ffffff" />
-                      <stop offset="100%" stopColor="#8b7aff" />
-                    </linearGradient>
-                  </defs>
                   <circle
-                    cx="115"
-                    cy="115"
-                    r="102"
+                    cx="90"
+                    cy="90"
+                    r="78"
                     fill="none"
-                    stroke="url(#moonGlow)"
-                    strokeWidth="4"
-                    strokeDasharray={2 * Math.PI * 102}
-                    strokeDashoffset={(2 * Math.PI * 102) - (((wakeAngle - bedAngle + 360) % 360) / 360) * (2 * Math.PI * 102)}
+                    stroke="#507c61"
+                    strokeWidth="9"
+                    strokeDasharray={2 * Math.PI * 78}
+                    strokeDashoffset={(2 * Math.PI * 78) - (((wakeAngle - bedAngle + 360) % 360) / 360) * (2 * Math.PI * 78)}
                     strokeLinecap="round"
-                    style={{ filter: 'drop-shadow(0 0 8px rgba(139, 122, 255, 0.8))' }}
                   />
                 </svg>
 
-                {/* Central Info Display */}
                 <div style={{
+                  width: '124px',
+                  height: '124px',
+                  borderRadius: '50%',
+                  backgroundColor: '#ffffff',
+                  boxShadow: '0 8px 20px rgba(0,0,0,0.06)',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
                   pointerEvents: 'none'
                 }}>
-                  <Moon size={22} color="#a495ff" style={{ marginBottom: '8px' }} />
+                  <Leaf size={15} color="#507c61" style={{ marginBottom: '3px' }} />
 
-                  <div style={{ fontSize: '34px', fontWeight: 900, color: '#ffffff', lineHeight: 1, letterSpacing: '-1px' }}>
-                    {sleepDuration.hrs}<span style={{ fontSize: '15px', fontWeight: 600, color: '#7d8396', marginLeft: '2px', marginRight: '6px' }}>hr</span>
-                    {sleepDuration.mins}<span style={{ fontSize: '15px', fontWeight: 600, color: '#7d8396', marginLeft: '2px' }}>min</span>
+                  <div style={{ fontFamily: '"Playfair Display", serif', fontSize: '24px', fontWeight: 700, color: '#274736', lineHeight: 1 }}>
+                    {sleepDuration.hrs}:{sleepDuration.mins}
                   </div>
 
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#7d8396', marginTop: '6px' }}>
-                    Your target sleep
+                  <span style={{ fontSize: '10px', fontWeight: 600, color: '#687e71', marginTop: '3px' }}>
+                    {sleepDuration.score}% of 8h
                   </span>
-
-                  <div style={{
-                    marginTop: '10px',
-                    padding: '4px 12px',
-                    borderRadius: '20px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: '#e2e5f0'
-                  }}>
-                    98% Sleep Score
-                  </div>
                 </div>
 
                 {/* Bed Handle */}
@@ -2252,14 +2422,15 @@ export default function App() {
                   onTouchStart={() => setActiveHandle('bed')}
                   style={{
                     position: 'absolute',
-                    left: `${115 + 102 * Math.cos((bedAngle - 90) * (Math.PI / 180))}px`,
-                    top: `${115 + 102 * Math.sin((bedAngle - 90) * (Math.PI / 180))}px`,
+                    left: `${90 + 78 * Math.cos((bedAngle - 90) * (Math.PI / 180))}px`,
+                    top: `${90 + 78 * Math.sin((bedAngle - 90) * (Math.PI / 180))}px`,
                     transform: 'translate(-50%, -50%)',
-                    width: '18px',
-                    height: '18px',
+                    width: '20px',
+                    height: '20px',
                     borderRadius: '50%',
                     backgroundColor: '#ffffff',
-                    boxShadow: '0 0 14px rgba(255, 255, 255, 0.9)',
+                    border: '2px solid #274736',
+                    boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
                     cursor: 'grab',
                     zIndex: 10
                   }}
@@ -2271,171 +2442,590 @@ export default function App() {
                   onTouchStart={() => setActiveHandle('wake')}
                   style={{
                     position: 'absolute',
-                    left: `${115 + 102 * Math.cos((wakeAngle - 90) * (Math.PI / 180))}px`,
-                    top: `${115 + 102 * Math.sin((wakeAngle - 90) * (Math.PI / 180))}px`,
+                    left: `${90 + 78 * Math.cos((wakeAngle - 90) * (Math.PI / 180))}px`,
+                    top: `${90 + 78 * Math.sin((wakeAngle - 90) * (Math.PI / 180))}px`,
                     transform: 'translate(-50%, -50%)',
-                    width: '18px',
-                    height: '18px',
+                    width: '20px',
+                    height: '20px',
                     borderRadius: '50%',
-                    backgroundColor: '#8b7aff',
+                    backgroundColor: '#274736',
                     border: '2px solid #ffffff',
-                    boxShadow: '0 0 14px rgba(139, 122, 255, 0.9)',
+                    boxShadow: '0 4px 10px rgba(39, 71, 54, 0.4)',
                     cursor: 'grab',
                     zIndex: 10
                   }}
                 />
               </div>
-            </div>
 
-            {/* Weekly Consistency Score Strip (From Screenshot) */}
-            {renderWeeklyConsistencyPills()}
+              {/* Time Badges */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%', marginTop: '14px' }}>
+                <div style={{
+                  backgroundColor: '#ffffff',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
+                  padding: '10px 12px',
+                  borderRadius: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center'
+                }}>
+                  <span style={{ fontSize: '10px', color: '#687e71', fontWeight: 600 }}>BedTime</span>
+                  <span style={{ fontFamily: '"Playfair Display", serif', fontSize: '17px', fontWeight: 700, color: '#274736' }}>
+                    {angleToTime(bedAngle)}
+                  </span>
+                </div>
 
-            {/* Somnia Smart Habit Card (From Screenshot) */}
-            <div style={{
-              backgroundColor: 'rgba(23, 26, 38, 0.7)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '22px',
-              padding: '14px 16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '14px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <Sparkles size={22} color="#ffffff" style={{ flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontSize: '10px', textTransform: 'uppercase', color: '#7d8396', fontWeight: 800, letterSpacing: '0.6px' }}>
-                    CogniWake Rule
-                  </div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#e2e5f0', lineHeight: 1.3, marginTop: '2px' }}>
-                    Consistent wake times build unbreakable morning momentum.
-                  </div>
+                <div style={{
+                  backgroundColor: '#274736',
+                  boxShadow: '0 6px 14px rgba(39, 71, 54, 0.25)',
+                  padding: '10px 12px',
+                  borderRadius: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  color: '#ffffff'
+                }}>
+                  <span style={{ fontSize: '10px', color: '#d2ded7', fontWeight: 600 }}>Wake up</span>
+                  <span style={{ fontFamily: '"Playfair Display", serif', fontSize: '17px', fontWeight: 700 }}>
+                    {angleToTime(wakeAngle)}
+                  </span>
                 </div>
               </div>
-              <ChevronRight size={16} color="#7d8396" />
             </div>
 
-            {/* Daily Tasks / Missions Cards (From Screenshot) */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-                <span style={{ fontSize: '15px', fontWeight: 800 }}>Daily Missions</span>
-                <span style={{ fontSize: '11px', color: '#7d8396', fontWeight: 700, backgroundColor: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: '8px' }}>
-                  4/4
+            {/* FIXED OVERLAP BUG: Clean spacing, no text collision */}
+            <div style={{
+              backgroundColor: '#f1f3ea',
+              borderRadius: '28px',
+              boxShadow: cardShadow,
+              padding: '16px',
+              marginBottom: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontFamily: '"Playfair Display", serif', fontSize: '16px', fontWeight: 600 }}>
+                  Weekly Rhythm
+                </span>
+                <span style={{ fontSize: '11px', color: '#274736', fontWeight: 600 }}>
+                  {sleepDuration.score}% Optimal (8h Goal)
                 </span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div 
-                  onClick={() => setIsMissionConfigOpen(true)}
-                  style={{
-                    backgroundColor: 'rgba(23, 26, 38, 0.7)',
-                    border: '1px solid rgba(255, 255, 255, 0.06)',
-                    borderRadius: '18px',
-                    padding: '12px 14px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <BookOpen size={18} color="#a495ff" />
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#e2e5f0' }}>Brain Math & Eye</span>
-                  <span style={{ fontSize: '10px', color: '#7d8396' }}>Awakens alertness</span>
-                </div>
+              {/* Dynamic 7-Day Rhythm with today's real day highlighted */}
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'flex-end', 
+                height: '75px', 
+                padding: '4px 2px 0 2px'
+              }}>
+                {[
+                  { d: 'MON', dayNum: 1, hrs: '7.5h', pct: 93 },
+                  { d: 'TUE', dayNum: 2, hrs: '6.0h', pct: 75 },
+                  { d: 'WED', dayNum: 3, hrs: '7.0h', pct: 87 },
+                  { d: 'THU', dayNum: 4, hrs: '8.0h', pct: 100 },
+                  { d: 'FRI', dayNum: 5, hrs: '7.2h', pct: 90 },
+                  { d: 'SAT', dayNum: 6, hrs: '6.5h', pct: 81 },
+                  { d: 'SUN', dayNum: 0, hrs: `${sleepDuration.hrs}h`, pct: sleepDuration.score }
+                ].map((item, idx) => {
+                  const isToday = currentDayIndex === item.dayNum;
+                  const displayHrs = isToday ? `${sleepDuration.hrs}h` : item.hrs;
+                  const displayPct = isToday ? sleepDuration.score : item.pct;
 
-                <div 
-                  onClick={() => setIsMissionConfigOpen(true)}
+                  return (
+                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ 
+                        fontSize: '9px', 
+                        fontWeight: isToday ? 700 : 500, 
+                        color: isToday ? '#274736' : '#687e71',
+                        lineHeight: 1
+                      }}>
+                        {displayHrs}
+                      </span>
+                      <div style={{
+                        width: '26px',
+                        height: `${Math.max(16, (displayPct / 100) * 44)}px`,
+                        borderRadius: '8px',
+                        backgroundColor: isToday ? '#274736' : '#c8d4c9',
+                        boxShadow: isToday ? '0 4px 10px rgba(39, 71, 54, 0.25)' : 'none',
+                        transition: 'height 0.3s ease, background-color 0.3s ease'
+                      }} />
+                      <span style={{ 
+                        fontSize: '9px', 
+                        fontWeight: isToday ? 700 : 500, 
+                        color: isToday ? '#274736' : '#687e71',
+                        marginTop: '2px'
+                      }}>
+                        {item.d}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Quick Link: Missions Settings */}
+            <div 
+              onClick={() => setIsMissionConfigOpen(true)}
+              style={{
+                backgroundColor: '#ffffff',
+                boxShadow: '0 4px 14px rgba(0,0,0,0.05)',
+                borderRadius: '18px',
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Leaf size={18} color="#274736" />
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#274736' }}>4 Morning Disciplines</span>
+              </div>
+              <ChevronRight size={16} color="#687e71" />
+            </div>
+
+          </div>
+        )}
+
+        {/* ================= PAGE 2: TIMER (WITH CUSTOM DURATION PICKER) ================= */}
+        {activeTab === 'timer' && (
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
+            <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+              <h1 style={{
+                fontFamily: '"Playfair Display", serif',
+                margin: 0,
+                fontSize: '26px',
+                fontWeight: 700,
+                letterSpacing: '1.5px',
+                color: '#274736'
+              }}>
+                FOCUS / TIMER
+              </h1>
+              <span style={{ fontSize: '10px', color: '#687e71', fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase' }}>
+                Deep Work & Power Naps
+              </span>
+            </div>
+
+            {/* Timer Circular Card */}
+            <div style={{
+              backgroundColor: '#f1f3ea',
+              borderRadius: '34px',
+              boxShadow: cardShadow,
+              padding: '22px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center'
+            }}>
+              <div style={{
+                position: 'relative',
+                width: '190px',
+                height: '190px',
+                borderRadius: '50%',
+                backgroundColor: '#f1f3ea',
+                boxShadow: insetCardShadow,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <svg 
+                  style={{ 
+                    position: 'absolute', 
+                    inset: 0, 
+                    width: '100%', 
+                    height: '100%', 
+                    transform: 'rotate(-90deg)', 
+                    transformOrigin: '95px 95px' 
+                  }} 
+                  viewBox="0 0 190 190"
+                >
+                  <circle
+                    cx="95"
+                    cy="95"
+                    r="82"
+                    fill="none"
+                    stroke="#4e7a5e"
+                    strokeWidth="9"
+                    strokeDasharray={2 * Math.PI * 82}
+                    strokeDashoffset={(2 * Math.PI * 82) * (1 - (timerSecondsLeft / Math.max(1, timerDuration)))}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dashoffset 0.8s ease' }}
+                  />
+                </svg>
+
+                <div style={{
+                  width: '130px',
+                  height: '130px',
+                  borderRadius: '50%',
+                  backgroundColor: '#ffffff',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Leaf size={16} color="#507c61" style={{ marginBottom: '3px' }} />
+                  <div style={{
+                    fontFamily: '"Playfair Display", serif',
+                    fontSize: '28px',
+                    fontWeight: 700,
+                    color: '#274736',
+                    lineHeight: 1
+                  }}>
+                    {formatTimerDisplay(timerSecondsLeft)}
+                  </div>
+                  <span style={{ fontSize: '10px', fontWeight: 600, color: '#687e71', marginTop: '4px' }}>
+                    {isTimerRunning ? 'In Session' : 'Ready'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginTop: '20px' }}>
+                <button
+                  onClick={handleResetTimer}
+                  title="Reset Timer"
                   style={{
-                    backgroundColor: 'rgba(23, 26, 38, 0.7)',
-                    border: '1px solid rgba(255, 255, 255, 0.06)',
-                    borderRadius: '18px',
-                    padding: '12px 14px',
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '50%',
+                    backgroundColor: '#f1f3ea',
+                    boxShadow: cardShadow,
+                    border: 'none',
                     display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                    cursor: 'pointer'
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#274736'
                   }}
                 >
-                  <Layers size={18} color="#a495ff" />
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#e2e5f0' }}>Voice & Dance</span>
-                  <span style={{ fontSize: '10px', color: '#7d8396' }}>Forces out of bed</span>
-                </div>
+                  <RotateCcw size={16} />
+                </button>
+
+                <button
+                  onClick={handleToggleTimer}
+                  style={{
+                    width: '60px',
+                    height: '60px',
+                    borderRadius: '50%',
+                    backgroundColor: '#4e7a5e',
+                    boxShadow: '0 10px 24px rgba(78, 122, 94, 0.4)',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#ffffff'
+                  }}
+                >
+                  {isTimerRunning ? <Pause size={22} /> : <Play size={22} style={{ marginLeft: '3px' }} />}
+                </button>
+
+                <button
+                  onClick={() => setIsCustomTimerModalOpen(true)}
+                  title="Set Custom Duration"
+                  style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '50%',
+                    backgroundColor: '#f1f3ea',
+                    boxShadow: cardShadow,
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#274736'
+                  }}
+                >
+                  <Sliders size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Presets */}
+            <div style={{
+              backgroundColor: '#f1f3ea',
+              borderRadius: '26px',
+              boxShadow: cardShadow,
+              padding: '14px 16px',
+              marginTop: '12px'
+            }}>
+              <span style={{ fontFamily: '"Playfair Display", serif', fontSize: '15px', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
+                Timer Presets
+              </span>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {[
+                  { name: '1 Hour Study / Work', mins: 60, icon: Leaf },
+                  { name: 'Pomodoro Focus', mins: 25, icon: Sun },
+                  { name: 'Power Nap', mins: 15, icon: Moon }
+                ].map((mode, i) => (
+                  <div
+                    key={i}
+                    onClick={() => handleSetTimerPreset(mode.mins)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      borderRadius: '14px',
+                      backgroundColor: timerDuration === mode.mins * 60 ? '#ffffff' : 'transparent',
+                      boxShadow: timerDuration === mode.mins * 60 ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <mode.icon size={15} color="#507c61" />
+                      <span style={{ fontSize: '12px', fontWeight: 600 }}>{mode.name}</span>
+                    </div>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#687e71' }}>{mode.mins}m</span>
+                  </div>
+                ))}
               </div>
             </div>
 
           </div>
         )}
 
-        {/* ================= PAGE 2: ALARMS LIST & CONTROLS ================= */}
+        {/* ================= PAGE 3: STOPWATCH / STUDY ACTIVITY TRACKER ================= */}
+        {activeTab === 'stopwatch' && (
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
+            <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+              <h1 style={{
+                fontFamily: '"Playfair Display", serif',
+                margin: 0,
+                fontSize: '26px',
+                fontWeight: 700,
+                letterSpacing: '1.5px',
+                color: '#274736'
+              }}>
+                STUDY / TRACK
+              </h1>
+              <span style={{ fontSize: '10px', color: '#687e71', fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase' }}>
+                Track Reading & Activity
+              </span>
+            </div>
+
+            {/* Stopwatch Raised Card */}
+            <div style={{
+              backgroundColor: '#f1f3ea',
+              borderRadius: '34px',
+              boxShadow: cardShadow,
+              padding: '24px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center'
+            }}>
+              <div style={{
+                width: '210px',
+                height: '110px',
+                backgroundColor: '#ffffff',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.05)',
+                borderRadius: '26px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid #dcdfd5'
+              }}>
+                <Clock size={18} color="#274736" style={{ marginBottom: '4px' }} />
+                <div style={{
+                  fontFamily: '"Playfair Display", serif',
+                  fontSize: '28px',
+                  fontWeight: 700,
+                  color: '#274736',
+                  letterSpacing: '0.5px'
+                }}>
+                  {formatStopwatchDisplay(stopwatchTime)}
+                </div>
+                <span style={{ fontSize: '9px', fontWeight: 600, color: '#687e71', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  {isStopwatchRunning ? 'Tracking Active' : 'Stopped'}
+                </span>
+              </div>
+
+              {/* Stopwatch Action Buttons */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '22px' }}>
+                <button
+                  onClick={handleResetStopwatch}
+                  title="Reset"
+                  style={{
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '50%',
+                    backgroundColor: '#f1f3ea',
+                    boxShadow: cardShadow,
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#274736'
+                  }}
+                >
+                  <RotateCcw size={16} />
+                </button>
+
+                <button
+                  onClick={handleToggleStopwatch}
+                  style={{
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '50%',
+                    backgroundColor: isStopwatchRunning ? '#b91c1c' : '#274736',
+                    boxShadow: '0 10px 24px rgba(39, 71, 54, 0.4)',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#ffffff'
+                  }}
+                >
+                  {isStopwatchRunning ? <Pause size={24} /> : <Play size={24} style={{ marginLeft: '3px' }} />}
+                </button>
+
+                <button
+                  onClick={handleAddLap}
+                  disabled={!isStopwatchRunning}
+                  title="Save Lap / Split"
+                  style={{
+                    width: '46px',
+                    height: '46px',
+                    borderRadius: '50%',
+                    backgroundColor: '#f1f3ea',
+                    boxShadow: cardShadow,
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: isStopwatchRunning ? 'pointer' : 'default',
+                    color: isStopwatchRunning ? '#274736' : '#a8b0a5'
+                  }}
+                >
+                  <Flag size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Laps / Sessions History */}
+            <div style={{
+              backgroundColor: '#f1f3ea',
+              borderRadius: '26px',
+              boxShadow: cardShadow,
+              padding: '14px 16px',
+              marginTop: '12px',
+              maxHeight: '140px',
+              overflowY: 'auto'
+            }}>
+              <span style={{ fontFamily: '"Playfair Display", serif', fontSize: '15px', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
+                Study Splits ({laps.length})
+              </span>
+
+              {laps.length === 0 ? (
+                <div style={{ fontSize: '11px', color: '#687e71', textAlign: 'center', padding: '10px 0' }}>
+                  Tap Flag button while running to record sessions!
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {laps.map((lap) => (
+                    <div
+                      key={lap.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        padding: '6px 10px',
+                        backgroundColor: '#ffffff',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: 600
+                      }}
+                    >
+                      <span style={{ color: '#687e71' }}>Session #{lap.id}</span>
+                      <span style={{ color: '#274736' }}>{formatStopwatchDisplay(lap.time)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+
+        {/* ================= PAGE 4: ALARMS LIST ================= */}
         {activeTab === 'alarms' && (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
-                <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, letterSpacing: '-0.5px' }}>Alarms</h2>
-                <span style={{ fontSize: '12px', color: '#7d8396', fontWeight: 600 }}>Active Schedules</span>
+                <h2 style={{ fontFamily: '"Playfair Display", serif', margin: 0, fontSize: '26px', fontWeight: 700 }}>
+                  Alarms
+                </h2>
+                <span style={{ fontSize: '11px', color: '#687e71', fontWeight: 600 }}>Wake-Up Schedules</span>
               </div>
               <button
                 onClick={() => setIsAddModalOpen(true)}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  background: '#274736',
+                  border: 'none',
                   borderRadius: '50%',
-                  width: '36px',
-                  height: '36px',
+                  width: '38px',
+                  height: '38px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
-                  color: '#ffffff'
+                  color: '#ffffff',
+                  boxShadow: '0 6px 14px rgba(39, 71, 54, 0.3)'
                 }}
               >
                 <Plus size={18} />
               </button>
             </div>
 
-            {/* Quick Master Switch & Sound Selector */}
+            {/* Master Settings Box */}
             <div style={{
-              backgroundColor: 'rgba(23, 26, 38, 0.7)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '22px',
-              padding: '14px 16px',
+              backgroundColor: '#f1f3ea',
+              borderRadius: '26px',
+              boxShadow: cardShadow,
+              padding: '16px',
               display: 'flex',
               flexDirection: 'column',
               gap: '12px',
-              margin: '16px 0'
+              margin: '14px 0'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <span style={{ fontSize: '13px', fontWeight: 800 }}>Master Alarm</span>
-                  <div style={{ fontSize: '10px', color: '#7d8396' }}>Toggle all upcoming triggers</div>
+                  <span style={{ fontSize: '14px', fontWeight: 600 }}>Master Alarm Trigger</span>
+                  <div style={{ fontSize: '11px', color: '#687e71' }}>Enable or pause automated ringing</div>
                 </div>
                 <div
                   onClick={() => setAlarmEnabled(!alarmEnabled)}
                   style={{
-                    width: '42px',
-                    height: '24px',
-                    borderRadius: '12px',
-                    backgroundColor: alarmEnabled ? '#ffffff' : 'rgba(255,255,255,0.1)',
+                    width: '46px',
+                    height: '26px',
+                    borderRadius: '13px',
+                    backgroundColor: alarmEnabled ? '#274736' : '#d5dacf',
                     display: 'flex',
                     alignItems: 'center',
-                    padding: '2px',
+                    padding: '3px',
                     boxSizing: 'border-box',
                     cursor: 'pointer',
                     justifyContent: alarmEnabled ? 'flex-end' : 'flex-start',
                     transition: 'all 0.2s'
                   }}
                 >
-                  <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: alarmEnabled ? '#000000' : '#ffffff' }} />
+                  <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#ffffff', boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }} />
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', color: '#7d8396', fontWeight: 600 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', color: '#687e71', fontWeight: 600 }}>
                 <div 
                   onClick={() => setIsSoundSelectorOpen(true)}
-                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', color: '#fff' }}
+                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', color: '#274736' }}
                 >
-                  <span>Sound: <strong>{getSoundDisplayName()}</strong></span>
-                  <ChevronRight size={13} />
+                  <span>Tone: <strong>{getSoundDisplayName()}</strong></span>
+                  <ChevronRight size={14} />
                 </div>
                 <button
                   onClick={handleTogglePreview}
@@ -2443,7 +3033,7 @@ export default function App() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
-                    color: isPlayingPreview ? '#ffffff' : '#7d8396',
+                    color: isPlayingPreview ? '#274736' : '#687e71',
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
@@ -2452,13 +3042,13 @@ export default function App() {
                     padding: 0
                   }}
                 >
-                  {isPlayingPreview ? <Volume2 size={13} color="#ffffff" /> : <VolumeX size={13} color="#7d8396" />}
+                  {isPlayingPreview ? <Volume2 size={14} color="#274736" /> : <VolumeX size={14} color="#687e71" />}
                   <span>{isPlayingPreview ? 'Stop' : 'Preview'}</span>
                 </button>
               </div>
 
-              <div style={{ position: 'relative', width: '100%', height: '5px', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '3px', display: 'flex', alignItems: 'center' }}>
-                <div style={{ height: '100%', width: `${volume}%`, backgroundColor: '#ffffff', borderRadius: '3px' }} />
+              <div style={{ position: 'relative', width: '100%', height: '6px', backgroundColor: '#d5dacf', borderRadius: '3px', display: 'flex', alignItems: 'center' }}>
+                <div style={{ height: '100%', width: `${volume}%`, backgroundColor: '#274736', borderRadius: '3px' }} />
                 <input
                   type="range"
                   min="0"
@@ -2470,20 +3060,15 @@ export default function App() {
               </div>
             </div>
 
-            {/* Saved Alarms List */}
+            {/* Alarms Items List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1, overflowY: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#7d8396' }}>Configured Wake-Ups</span>
-                <span style={{ fontSize: '11px', color: '#ffffff', fontWeight: 700, cursor: 'pointer' }} onClick={() => setIsAddModalOpen(true)}>+ Add New</span>
-              </div>
-
               {alarms.map((alarm) => (
                 <div
                   key={alarm.id}
                   style={{
-                    backgroundColor: 'rgba(23, 26, 38, 0.7)',
-                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    backgroundColor: '#ffffff',
                     borderRadius: '20px',
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.04)',
                     padding: '14px 16px',
                     display: 'flex',
                     alignItems: 'center',
@@ -2491,13 +3076,15 @@ export default function App() {
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: '20px', fontWeight: 900, color: alarm.active ? '#ffffff' : '#575c6e' }}>{alarm.time}</div>
-                    <div style={{ fontSize: '11px', color: '#8b92a8', fontWeight: 600 }}>{alarm.note || alarm.label}</div>
+                    <div style={{ fontFamily: '"Playfair Display", serif', fontSize: '20px', fontWeight: 700, color: alarm.active ? '#274736' : '#9aa399' }}>
+                      {alarm.time}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#687e71', fontWeight: 500 }}>{alarm.note || alarm.label}</div>
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {!alarm.isDialSync && (
-                      <button onClick={() => deleteAlarm(alarm.id)} style={{ background: 'none', border: 'none', color: '#575c6e', cursor: 'pointer' }}>
+                      <button onClick={() => deleteAlarm(alarm.id)} style={{ background: 'none', border: 'none', color: '#9aa399', cursor: 'pointer' }}>
                         <Trash2 size={16} />
                       </button>
                     )}
@@ -2507,7 +3094,7 @@ export default function App() {
                         width: '42px',
                         height: '24px',
                         borderRadius: '12px',
-                        backgroundColor: alarm.active ? '#ffffff' : 'rgba(255,255,255,0.08)',
+                        backgroundColor: alarm.active ? '#274736' : '#d5dacf',
                         display: 'flex',
                         alignItems: 'center',
                         padding: '2px',
@@ -2516,7 +3103,7 @@ export default function App() {
                         justifyContent: alarm.active ? 'flex-end' : 'flex-start'
                       }}
                     >
-                      <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: alarm.active ? '#000000' : '#ffffff' }} />
+                      <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
                     </div>
                   </div>
                 </div>
@@ -2526,16 +3113,16 @@ export default function App() {
           </div>
         )}
 
-        {/* ================= BOTTOM GLASS NAVIGATION (From Screenshot) ================= */}
+        {/* ================= 4-TAB NEUMORPHIC BOTTOM NAVIGATION ================= */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-around',
           alignItems: 'center',
-          paddingTop: '12px',
-          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-          marginTop: '12px',
-          position: 'relative',
-          zIndex: 5
+          backgroundColor: '#f1f3ea',
+          boxShadow: cardShadow,
+          borderRadius: '26px',
+          padding: '10px 10px',
+          marginTop: '12px'
         }}>
           <button
             onClick={() => setActiveTab('sleep')}
@@ -2546,14 +3133,51 @@ export default function App() {
               flexDirection: 'column',
               alignItems: 'center',
               gap: '4px',
-              color: activeTab === 'sleep' ? '#ffffff' : '#575c6e',
-              cursor: 'pointer'
+              color: activeTab === 'sleep' ? '#274736' : '#889a8e',
+              cursor: 'pointer',
+              fontWeight: 600
             }}
           >
-            <Moon size={20} />
-            <span style={{ fontSize: '11px', fontWeight: 700 }}>Today</span>
+            <Compass size={18} />
+            <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sleep</span>
           </button>
           
+          <button
+            onClick={() => setActiveTab('timer')}
+            style={{
+              background: 'none',
+              border: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '4px',
+              color: activeTab === 'timer' ? '#274736' : '#889a8e',
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+          >
+            <Leaf size={18} />
+            <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Timer</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('stopwatch')}
+            style={{
+              background: 'none',
+              border: 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '4px',
+              color: activeTab === 'stopwatch' ? '#274736' : '#889a8e',
+              cursor: 'pointer',
+              fontWeight: 600
+            }}
+          >
+            <Clock size={18} />
+            <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Track</span>
+          </button>
+
           <button
             onClick={() => setActiveTab('alarms')}
             style={{
@@ -2563,12 +3187,13 @@ export default function App() {
               flexDirection: 'column',
               alignItems: 'center',
               gap: '4px',
-              color: activeTab === 'alarms' ? '#ffffff' : '#575c6e',
-              cursor: 'pointer'
+              color: activeTab === 'alarms' ? '#274736' : '#889a8e',
+              cursor: 'pointer',
+              fontWeight: 600
             }}
           >
-            <Bell size={20} />
-            <span style={{ fontSize: '11px', fontWeight: 700 }}>Alarms</span>
+            <Bell size={18} />
+            <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Alarms</span>
           </button>
         </div>
 
