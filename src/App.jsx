@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   ChevronRight, Volume2, VolumeX, BellRing, Plus, Trash2, X, Check, 
-  RefreshCw, Moon, Bell, Camera, Mic, Upload, Music, Flame, FileText, Activity, Calendar as CalendarIcon
+  RefreshCw, Moon, Bell, Camera, Mic, Upload, Music, Flame, FileText, Activity, Sparkles, Calendar, BookOpen, Layers
 } from 'lucide-react';
 import { FilesetResolver, FaceLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { supabase } from './supabase';
 
-const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v14';
+const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v15';
 const USER_ID_KEY = 'cogniwake_user_uid_v1';
 const CUSTOM_AUDIO_KEY = 'cogniwake_custom_audio_cache_v1';
 
@@ -27,7 +27,7 @@ const DANCE_PLAYLIST = [
   { id: 'oyehoye', name: '🔥 Oye Hoye Kya Baat Hai', src: '/sounds/oye hoye kya.mp3' }
 ];
 
-// 22 Full Audio Library
+// Full 22 Sounds Library
 const DEFAULT_SOUNDS = [
   { id: 'america', name: '🎙️ America Kya Kehta Tha', type: 'audio', src: '/sounds/America Kya Kehta Tha.mp3', category: 'prank' },
   { id: 'baby_crying', name: '👶 Baby Crying Tears', type: 'audio', src: '/sounds/Baby Crying Tears.mp3', category: 'prank' },
@@ -65,7 +65,6 @@ export default function App() {
   const [alarmNote, setAlarmNote] = useState('Gym & Morning Workout!');
   const [activeRingingNote, setActiveRingingNote] = useState('');
 
-  // 4 Active Verification Missions
   const [enabledMissions, setEnabledMissions] = useState({
     math: true,
     eyes: true,
@@ -74,14 +73,13 @@ export default function App() {
   });
   const [isMissionConfigOpen, setIsMissionConfigOpen] = useState(false);
 
-  // Active Dance Song Selector
   const [currentDanceTrackId, setCurrentDanceTrackId] = useState('bollywood');
 
   const [selectedSound, setSelectedSound] = useState('chicken_screaming');
   const [customAudioData, setCustomAudioData] = useState(null);
   const [isSoundSelectorOpen, setIsSoundSelectorOpen] = useState(false);
 
-  // 2-Page Tab Navigation (sleep vs alarms)
+  // 2-Page Navigation
   const [activeTab, setActiveTab] = useState('sleep');
   const [syncStatus, setSyncStatus] = useState('synced');
 
@@ -756,7 +754,6 @@ export default function App() {
   };
 
   const startDanceRound = (trackToPlay = null) => {
-    // 1. Instantly mute background alarm tone
     stopMelodyLoop();
     setDanceFailed(false);
     setDanceTimeRemaining(15);
@@ -768,7 +765,6 @@ export default function App() {
       danceAudioRef.current.pause();
     }
 
-    // Direct, reliable audio player
     const audio = new Audio(targetSong.src);
     danceAudioRef.current = audio;
     audio.loop = true;
@@ -799,7 +795,7 @@ export default function App() {
           }
           setDanceFailed(true);
           setDanceStatus('⏰ 15s Time Up! Hit "Try Again" & dance faster!');
-          startMelodyLoop(); // Alarm dobara bajna shuru
+          startMelodyLoop();
         }
       }
     }, 1000);
@@ -900,11 +896,11 @@ export default function App() {
               };
             };
 
-            // Neon Skeleton Overlay
+            // Neon Mint Glow Skeleton Overlay
             canvasContext.lineWidth = 4;
             canvasContext.lineCap = 'round';
-            canvasContext.strokeStyle = '#39ffcf';
-            canvasContext.shadowColor = '#00ffc8';
+            canvasContext.strokeStyle = '#a495ff';
+            canvasContext.shadowColor = '#8070ff';
             canvasContext.shadowBlur = 10;
 
             for (const [start, end] of connections) {
@@ -918,7 +914,6 @@ export default function App() {
             }
             canvasContext.shadowBlur = 0;
 
-            // Strict Full-Body Verification:
             const shouldersVisible = pointIsVisible(11) && pointIsVisible(12);
             const handsVisible = pointIsVisible(15) || pointIsVisible(16);
             const legsVisible = pointIsVisible(25) || pointIsVisible(26) || pointIsVisible(23) || pointIsVisible(24);
@@ -954,7 +949,6 @@ export default function App() {
                 const avgHandMotion = handDeltas.length ? handDeltas.reduce((a, b) => a + b, 0) / handDeltas.length : 0;
                 const avgLowerBodyMotion = lowerBodyDeltas.length ? lowerBodyDeltas.reduce((a, b) => a + b, 0) / lowerBodyDeltas.length : 0;
 
-                // Anti-Cheat Condition:
                 if (avgLowerBodyMotion > 0.016 && avgHandMotion > 0.018) {
                   danceScoreRef.current = Math.min(100, danceScoreRef.current + 1.35);
                   setDanceStatus('🔥 Awesome Full Body Moves! Keep jumping!');
@@ -1134,7 +1128,7 @@ export default function App() {
     setNewAlarmCustomNote('');
   };
 
-  // Real-time Clock Monitor
+  // Clock Monitor
   useEffect(() => {
     const checkAlarmTime = () => {
       if (isRinging) return;
@@ -1195,52 +1189,47 @@ export default function App() {
     };
   }, [activeHandle, handleMove]);
 
-  // Mini Calendar Helper for Page 1
-  const renderMiniCalendar = () => {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const now = new Date();
-    const todayDay = now.getDay();
-    const todayDate = now.getDate();
-
-    const weekDates = [];
-    for (let i = -3; i <= 3; i++) {
-      const d = new Date();
-      d.setDate(todayDate + i);
-      weekDates.push({
-        dayName: days[d.getDay()],
-        dateNum: d.getDate(),
-        isToday: i === 0
-      });
-    }
+  // Aesthetic Weekly Score Strip (Matches Screenshot)
+  const renderWeeklyConsistencyPills = () => {
+    const daysData = [
+      { day: 'M', score: '82%' },
+      { day: 'T', score: '78%' },
+      { day: 'W', score: '54%' },
+      { day: 'T', score: '84%' },
+      { day: 'F', score: '78%' },
+      { day: 'S', score: '98%', active: true },
+      { day: 'S', score: '--' }
+    ];
 
     return (
       <div style={{
-        backgroundColor: '#1b0633',
-        border: '1px solid #37145b',
-        borderRadius: '16px',
-        padding: '8px 10px',
         display: 'flex',
         justifyContent: 'space-between',
         width: '100%',
-        boxSizing: 'border-box',
-        margin: '6px 0'
+        margin: '12px 0 16px 0',
+        padding: '0 2px'
       }}>
-        {weekDates.map((item, idx) => (
-          <div
-            key={idx}
-            style={{
+        {daysData.map((d, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+            <div style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              backgroundColor: d.active ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.05)',
+              border: d.active ? '1px solid rgba(255, 255, 255, 0.4)' : '1px solid rgba(255, 255, 255, 0.05)',
+              boxShadow: d.active ? '0 0 16px rgba(255, 255, 255, 0.35)' : 'none',
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
-              padding: '4px 6px',
-              borderRadius: '10px',
-              backgroundColor: item.isToday ? '#ff1b90' : 'transparent',
-              color: item.isToday ? '#fff' : '#8d72b2',
-              boxShadow: item.isToday ? '0 0 10px rgba(255, 27, 144, 0.6)' : 'none'
-            }}
-          >
-            <span style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' }}>{item.dayName}</span>
-            <span style={{ fontSize: '13px', fontWeight: 900, marginTop: '2px' }}>{item.dateNum}</span>
+              justifyContent: 'center',
+              fontSize: '11px',
+              fontWeight: 800,
+              color: d.active ? '#ffffff' : '#7d8396'
+            }}>
+              {d.score}
+            </div>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: d.active ? '#ffffff' : '#575c6e' }}>
+              {d.day}
+            </span>
           </div>
         ))}
       </div>
@@ -1250,7 +1239,7 @@ export default function App() {
   const sleepDuration = calculateSleepDuration();
 
   const getSoundDisplayName = () => {
-    if (selectedSound === 'custom') return '🎵 Custom MP3';
+    if (selectedSound === 'custom') return 'Custom Track';
     const found = DEFAULT_SOUNDS.find((s) => s.id === selectedSound);
     return found ? found.name.split(' ')[1] || found.name : 'Chicken';
   };
@@ -1261,16 +1250,16 @@ export default function App() {
     <div style={{
       minHeight: '100dvh',
       width: '100vw',
-      backgroundColor: '#0a0214',
+      background: 'radial-gradient(circle at 50% 15%, #181b29 0%, #0a0b10 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       margin: 0,
       padding: 0,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontFamily: '"Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif',
       boxSizing: 'border-box',
       userSelect: 'none',
-      overflowX: 'hidden'
+      color: '#ffffff'
     }}>
 
       {/* ==================== ACTIVE ALARM RINGING SCREEN ==================== */}
@@ -1278,35 +1267,35 @@ export default function App() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          backgroundColor: 'rgba(10, 2, 20, 0.96)',
-          backdropFilter: 'blur(14px)',
+          backgroundColor: 'rgba(5, 6, 10, 0.94)',
+          backdropFilter: 'blur(20px)',
           zIndex: 100,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: 'max(10px, env(safe-area-inset-top)) 12px max(10px, env(safe-area-inset-bottom))'
+          padding: 'max(14px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom))'
         }}>
           <div style={{
             boxSizing: 'border-box',
             width: '100%',
             maxWidth: '380px',
-            backgroundColor: '#1b0633',
-            border: '2px solid #ff1b90',
-            borderRadius: '32px',
+            backgroundColor: 'rgba(23, 26, 38, 0.85)',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            borderRadius: '34px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            boxShadow: '0 0 60px rgba(255, 27, 144, 0.8)',
+            boxShadow: '0 25px 70px rgba(0, 0, 0, 0.8)',
             textAlign: 'center',
             color: '#fff',
             position: 'relative',
             maxHeight: 'calc(100dvh - 24px)',
             overflowY: 'auto',
             overscrollBehavior: 'contain',
-            padding: 'clamp(14px, 4vw, 22px) clamp(14px, 4vw, 20px)'
+            padding: '24px 20px'
           }}>
             {activePipeline.length > 0 && (
-              <div style={{ display: 'flex', gap: '8px', width: '100%', justifyContent: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', gap: '8px', width: '100%', justifyContent: 'center', marginBottom: '14px' }}>
                 {activePipeline.map((step, idx) => (
                   <div
                     key={step}
@@ -1314,7 +1303,7 @@ export default function App() {
                       flex: 1,
                       height: '4px',
                       borderRadius: '2px',
-                      backgroundColor: idx <= pipelineIndex ? '#ff1b90' : '#3d1768'
+                      backgroundColor: idx <= pipelineIndex ? '#ffffff' : 'rgba(255,255,255,0.1)'
                     }}
                   />
                 ))}
@@ -1324,21 +1313,21 @@ export default function App() {
             {activeRingingNote && (
               <div style={{
                 width: '100%',
-                backgroundColor: 'rgba(255, 27, 144, 0.15)',
-                border: '2px dashed #ff1b90',
-                borderRadius: '16px',
-                padding: '10px 14px',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '18px',
+                padding: '12px 14px',
                 boxSizing: 'border-box',
-                marginBottom: '12px',
+                marginBottom: '14px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
+                gap: '10px',
                 textAlign: 'left'
               }}>
-                <FileText size={20} color="#ff79c6" style={{ flexShrink: 0 }} />
+                <FileText size={20} color="#a495ff" style={{ flexShrink: 0 }} />
                 <div>
-                  <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#ff79c6', fontWeight: 800, letterSpacing: '0.5px' }}>
-                    Your Wake-Up Goal
+                  <div style={{ fontSize: '9px', textTransform: 'uppercase', color: '#8b92a8', fontWeight: 700, letterSpacing: '0.6px' }}>
+                    Wake-Up Intent
                   </div>
                   <div style={{ fontSize: '13px', fontWeight: 800, color: '#fff', lineHeight: 1.2 }}>
                     "{activeRingingNote}"
@@ -1351,47 +1340,48 @@ export default function App() {
               width: '52px',
               height: '52px',
               borderRadius: '50%',
-              backgroundColor: '#ff1b90',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 0 25px #ff1b90',
+              boxShadow: '0 0 30px rgba(255, 255, 255, 0.15)',
               marginBottom: '8px'
             }}>
-              <BellRing size={26} color="#fff" />
+              <BellRing size={24} color="#ffffff" />
             </div>
 
-            <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.5px', color: '#ff79c6', fontWeight: 800 }}>
+            <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.5px', color: '#8b92a8', fontWeight: 800 }}>
               {activePipeline.length > 0 ? `Mission ${pipelineIndex + 1} of ${activePipeline.length}` : 'Alarm Ringing'}
             </span>
 
             {/* STEP 1: MATH */}
             {currentActiveStepName === 'math' && (
-              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '6px' }}>
-                <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>Solve Math Problem</h3>
-                <p style={{ fontSize: '11px', color: '#c7a9e9', margin: 0 }}>
-                  Solve calculation to unlock next step!
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 800, margin: 0 }}>Solve Math Problem</h3>
+                <p style={{ fontSize: '11px', color: '#82889c', margin: 0 }}>
+                  Wake up your analytical brain!
                 </p>
 
                 <form onSubmit={handleVerifyMath} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div style={{
-                    backgroundColor: '#270e44',
-                    border: mathError ? '2px solid #ef4444' : '2px solid #ff1b90',
-                    borderRadius: '18px',
-                    padding: '14px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                    border: mathError ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.1)',
+                    borderRadius: '20px',
+                    padding: '16px',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
-                    gap: '8px'
+                    gap: '10px'
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '26px', fontWeight: 900, letterSpacing: '2px', color: '#fff' }}>
+                      <span style={{ fontSize: '28px', fontWeight: 900, letterSpacing: '2px', color: '#fff' }}>
                         {mathProblem.question} = ?
                       </span>
                       <button
                         type="button"
                         onClick={generateMathMission}
-                        style={{ background: 'none', border: 'none', color: '#c7a9e9', cursor: 'pointer' }}
+                        style={{ background: 'none', border: 'none', color: '#82889c', cursor: 'pointer' }}
                       >
                         <RefreshCw size={14} />
                       </button>
@@ -1399,17 +1389,17 @@ export default function App() {
 
                     <input
                       type="number"
-                      placeholder="Enter answer"
+                      placeholder="Answer"
                       value={userAnswer}
                       onChange={(e) => { setUserAnswer(e.target.value); setMathError(false); }}
                       autoFocus
                       style={{
-                        width: '140px',
+                        width: '130px',
                         textAlign: 'center',
                         padding: '10px',
-                        borderRadius: '12px',
-                        border: '1px solid #4a1e7d',
-                        backgroundColor: '#16042b',
+                        borderRadius: '14px',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        backgroundColor: 'rgba(0,0,0,0.4)',
                         color: '#fff',
                         fontSize: '18px',
                         fontWeight: 800,
@@ -1423,11 +1413,11 @@ export default function App() {
                     type="submit"
                     style={{
                       width: '100%',
-                      padding: '12px',
-                      borderRadius: '14px',
+                      padding: '13px',
+                      borderRadius: '16px',
                       border: 'none',
-                      background: 'linear-gradient(135deg, #ff1a8c, #c40b68)',
-                      color: '#fff',
+                      backgroundColor: '#ffffff',
+                      color: '#000000',
                       fontSize: '14px',
                       fontWeight: 800,
                       cursor: 'pointer',
@@ -1445,10 +1435,10 @@ export default function App() {
 
             {/* STEP 2: BOTH EYES */}
             {currentActiveStepName === 'eyes' && (
-              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
-                <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>Open BOTH Eyes</h3>
-                <p style={{ fontSize: '11px', color: '#c7a9e9', margin: 0 }}>
-                  Keep both eyes wide open for 1.5s!
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 800, margin: 0 }}>Open Both Eyes</h3>
+                <p style={{ fontSize: '11px', color: '#82889c', margin: 0 }}>
+                  Hold both eyes open for 1.5 seconds
                 </p>
 
                 <div style={{
@@ -1457,8 +1447,8 @@ export default function App() {
                   height: '170px',
                   borderRadius: '50%',
                   overflow: 'hidden',
-                  border: openEyesProgress > 60 ? '3px solid #10b981' : '3px solid #ff1b90',
-                  boxShadow: openEyesProgress > 60 ? '0 0 25px rgba(16, 185, 129, 0.6)' : '0 0 25px rgba(255, 27, 144, 0.6)',
+                  border: openEyesProgress > 60 ? '3px solid #10b981' : '2px solid rgba(255, 255, 255, 0.2)',
+                  boxShadow: openEyesProgress > 60 ? '0 0 30px rgba(16, 185, 129, 0.5)' : 'none',
                   backgroundColor: '#000'
                 }}>
                   <video
@@ -1470,16 +1460,16 @@ export default function App() {
                   />
                 </div>
 
-                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '5px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700 }}>
-                    <span style={{ color: openEyesProgress > 70 ? '#10b981' : '#ff79c6' }}>{eyesOpenStatus}</span>
+                    <span style={{ color: openEyesProgress > 70 ? '#10b981' : '#8b92a8' }}>{eyesOpenStatus}</span>
                     <span>{openEyesProgress}%</span>
                   </div>
-                  <div style={{ width: '100%', height: '8px', backgroundColor: '#270e44', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ width: '100%', height: '7px', backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: '4px', overflow: 'hidden' }}>
                     <div style={{
                       width: `${openEyesProgress}%`,
                       height: '100%',
-                      background: openEyesProgress > 70 ? 'linear-gradient(90deg, #10b981, #059669)' : 'linear-gradient(90deg, #ff1a8c, #c40b68)',
+                      backgroundColor: openEyesProgress > 70 ? '#10b981' : '#ffffff',
                       transition: 'width 0.1s linear'
                     }} />
                   </div>
@@ -1489,36 +1479,36 @@ export default function App() {
 
             {/* STEP 3: STRICT VOICE PHRASE */}
             {currentActiveStepName === 'voice' && (
-              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
-                <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>Speak Exact Phrase!</h3>
-                <p style={{ fontSize: '11px', color: '#c7a9e9', margin: 0 }}>
-                  Tap mic and speak this complete sentence to proceed:
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 800, margin: 0 }}>Speak Exact Phrase</h3>
+                <p style={{ fontSize: '11px', color: '#82889c', margin: 0 }}>
+                  Read this affirmation aloud clearly:
                 </p>
 
                 <div style={{
-                  backgroundColor: '#270e44',
-                  border: '2px dashed #ff1b90',
-                  borderRadius: '16px',
-                  padding: '12px 14px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '18px',
+                  padding: '14px',
                   width: '100%',
                   boxSizing: 'border-box'
                 }}>
-                  <span style={{ fontSize: '14px', fontWeight: 800, color: '#ffd0eb', fontStyle: 'italic', lineHeight: 1.4 }}>
+                  <span style={{ fontSize: '14px', fontWeight: 800, color: '#ffffff', fontStyle: 'italic', lineHeight: 1.4 }}>
                     "{targetVoicePhrase}"
                   </span>
                 </div>
 
                 {isListening && (
                   <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#c7a9e9', fontWeight: 600 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#82889c', fontWeight: 600 }}>
                       <span>Mic Sound Level</span>
                       <span>{voiceVolumeLevel}%</span>
                     </div>
-                    <div style={{ width: '100%', height: '6px', backgroundColor: '#270e44', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: '100%', height: '5px', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
                       <div style={{
                         width: `${voiceVolumeLevel}%`,
                         height: '100%',
-                        backgroundColor: voiceVolumeLevel > 30 ? '#10b981' : '#ff1b90',
+                        backgroundColor: '#ffffff',
                         transition: 'width 0.05s ease'
                       }} />
                     </div>
@@ -1526,7 +1516,7 @@ export default function App() {
                 )}
 
                 {transcript && (
-                  <div style={{ fontSize: '12px', color: '#c7a9e9' }}>
+                  <div style={{ fontSize: '12px', color: '#82889c' }}>
                     Heard: <strong style={{ color: '#fff' }}>"{transcript}"</strong>
                   </div>
                 )}
@@ -1539,25 +1529,23 @@ export default function App() {
                   disabled={isListening}
                   style={{
                     width: '100%',
-                    padding: '14px',
-                    borderRadius: '14px',
+                    padding: '13px',
+                    borderRadius: '16px',
                     border: 'none',
-                    background: isListening ? '#f59e0b' : 'linear-gradient(135deg, #ff1a8c, #c40b68)',
-                    color: '#fff',
-                    fontSize: '15px',
+                    backgroundColor: isListening ? '#f59e0b' : '#ffffff',
+                    color: '#000000',
+                    fontSize: '14px',
                     fontWeight: 800,
                     cursor: isListening ? 'default' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '8px',
-                    boxShadow: isListening ? '0 0 20px #f59e0b' : '0 8px 20px rgba(255,26,140,0.4)'
+                    gap: '8px'
                   }}
                 >
-                  <Mic size={18} /> {isListening ? 'Listening... Speak Sentence Now!' : 'Tap Mic & Read Phrase'}
+                  <Mic size={16} /> {isListening ? 'Listening... Speak Now!' : 'Tap Mic & Read Phrase'}
                 </button>
 
-                {/* SKIP / FORCE COMPLETE BUTTON */}
                 <button
                   type="button"
                   onClick={() => {
@@ -1566,15 +1554,14 @@ export default function App() {
                   }}
                   style={{
                     width: '100%',
-                    padding: '13px',
-                    borderRadius: '14px',
-                    border: '2px solid #ffd166',
-                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                    color: '#fff',
-                    fontSize: '14px',
-                    fontWeight: 900,
-                    cursor: 'pointer',
-                    boxShadow: '0 8px 20px rgba(245,158,11,0.4)'
+                    padding: '12px',
+                    borderRadius: '16px',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                    color: '#ffffff',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
                   }}
                 >
                   Skip / Force Complete Phrase
@@ -1585,22 +1572,22 @@ export default function App() {
             {/* STEP 4: STRICT FULL-BODY DANCE MISSION */}
             {currentActiveStepName === 'dance' && (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: 900, margin: 0 }}>💃 Morning Dance Mission</h3>
+                <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>Morning Dance Mission</h3>
 
-                {/* 15S COUNTDOWN HEADER & SONG SELECTOR */}
+                {/* 15S Countdown & Audio Switcher Header */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   width: '100%',
-                  backgroundColor: danceFailed ? '#ef4444' : '#270e44',
-                  border: danceFailed ? '1px solid #ef4444' : '1px solid #ff1b90',
-                  borderRadius: '12px',
+                  backgroundColor: danceFailed ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                  border: danceFailed ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '14px',
                   padding: '6px 10px',
                   boxSizing: 'border-box'
                 }}>
                   <div style={{ fontSize: '11px', fontWeight: 800, color: '#fff' }}>
-                    {danceFailed ? '🚨 15s Up! Alarm Ringing!' : `⏱️ Time Left: ${danceTimeRemaining}s`}
+                    {danceFailed ? '🚨 Time Up! Alarm Ringing!' : `⏱️ Time Left: ${danceTimeRemaining}s`}
                   </div>
 
                   <select
@@ -1608,19 +1595,19 @@ export default function App() {
                     onChange={(e) => switchDanceSong(e.target.value)}
                     disabled={danceFailed}
                     style={{
-                      background: '#1b0633',
-                      border: '1px solid #ff1b90',
+                      background: '#161924',
+                      border: '1px solid rgba(255,255,255,0.15)',
                       borderRadius: '8px',
-                      color: '#ffd0eb',
+                      color: '#fff',
                       fontSize: '10px',
                       fontWeight: 700,
-                      padding: '2px 6px',
+                      padding: '3px 6px',
                       outline: 'none',
                       cursor: 'pointer'
                     }}
                   >
                     {DANCE_PLAYLIST.map((trk) => (
-                      <option key={trk.id} value={trk.id} style={{ backgroundColor: '#1b0633', color: '#fff' }}>
+                      <option key={trk.id} value={trk.id} style={{ backgroundColor: '#161924', color: '#fff' }}>
                         {trk.name}
                       </option>
                     ))}
@@ -1632,10 +1619,10 @@ export default function App() {
                   width: 'min(100%, 270px)',
                   aspectRatio: '3 / 4',
                   maxHeight: '40svh',
-                  borderRadius: '24px',
+                  borderRadius: '26px',
                   overflow: 'hidden',
-                  border: danceProgress > 70 ? '3px solid #10b981' : '3px solid #ff1b90',
-                  boxShadow: danceProgress > 70 ? '0 0 30px rgba(16, 185, 129, 0.7)' : '0 0 30px rgba(255, 27, 144, 0.7)',
+                  border: danceProgress > 70 ? '2px solid #10b981' : '1px solid rgba(255, 255, 255, 0.15)',
+                  boxShadow: danceProgress > 70 ? '0 0 35px rgba(16, 185, 129, 0.5)' : 'none',
                   backgroundColor: '#000'
                 }}>
                   <video
@@ -1643,28 +1630,14 @@ export default function App() {
                     autoPlay
                     playsInline
                     muted
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      transform: 'scaleX(-1)'
-                    }}
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
                   />
                   <canvas
                     ref={danceCanvasRef}
                     width={360}
                     height={480}
                     aria-hidden="true"
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      width: '100%',
-                      height: '100%',
-                      pointerEvents: 'none',
-                      transform: 'scaleX(-1)'
-                    }}
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', transform: 'scaleX(-1)' }}
                   />
 
                   <div style={{
@@ -1679,25 +1652,25 @@ export default function App() {
                     gap: '4px',
                     fontSize: '10px',
                     fontWeight: 800,
-                    color: '#ff79c6'
+                    color: '#ffffff'
                   }}>
-                    <Activity size={12} color="#ff1b90" />
+                    <Activity size={12} color="#ffffff" />
                     <span>{danceProgress}%</span>
                   </div>
                 </div>
 
                 <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 700 }}>
-                    <span style={{ color: danceFailed ? '#ef4444' : (danceProgress > 70 ? '#10b981' : '#ff79c6') }}>
+                    <span style={{ color: danceFailed ? '#ef4444' : (danceProgress > 70 ? '#10b981' : '#8b92a8') }}>
                       {danceStatus}
                     </span>
                     <span>{danceProgress}%</span>
                   </div>
-                  <div style={{ width: '100%', height: '8px', backgroundColor: '#270e44', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ width: '100%', height: '7px', backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: '4px', overflow: 'hidden' }}>
                     <div style={{
                       width: `${danceProgress}%`,
                       height: '100%',
-                      background: danceProgress > 70 ? 'linear-gradient(90deg, #10b981, #059669)' : 'linear-gradient(90deg, #ff1a8c, #c40b68)',
+                      backgroundColor: danceProgress > 70 ? '#10b981' : '#ffffff',
                       transition: 'width 0.15s ease'
                     }} />
                   </div>
@@ -1711,14 +1684,13 @@ export default function App() {
                     style={{
                       width: '100%',
                       padding: '12px',
-                      borderRadius: '14px',
+                      borderRadius: '16px',
                       border: 'none',
-                      background: 'linear-gradient(135deg, #10b981, #059669)',
-                      color: '#fff',
+                      backgroundColor: '#ffffff',
+                      color: '#000000',
                       fontSize: '14px',
                       fontWeight: 800,
                       cursor: 'pointer',
-                      boxShadow: '0 8px 20px rgba(16, 185, 129, 0.4)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -1738,12 +1710,12 @@ export default function App() {
                   onClick={finalizeAlarmDismissal}
                   style={{
                     width: '100%',
-                    padding: '14px',
+                    padding: '13px',
                     borderRadius: '16px',
                     border: 'none',
-                    background: 'linear-gradient(135deg, #ff1a8c, #c40b68)',
-                    color: '#fff',
-                    fontSize: '15px',
+                    backgroundColor: '#ffffff',
+                    color: '#000000',
+                    fontSize: '14px',
                     fontWeight: 800,
                     cursor: 'pointer'
                   }}
@@ -1761,8 +1733,8 @@ export default function App() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          backgroundColor: 'rgba(10, 2, 20, 0.88)',
-          backdropFilter: 'blur(8px)',
+          backgroundColor: 'rgba(5, 6, 10, 0.85)',
+          backdropFilter: 'blur(16px)',
           zIndex: 120,
           display: 'flex',
           alignItems: 'center',
@@ -1771,12 +1743,12 @@ export default function App() {
         }}>
           <div style={{
             width: '100%',
-            maxWidth: '320px',
-            backgroundColor: '#1b0633',
-            border: '2px solid #ff1b90',
-            borderRadius: '28px',
-            padding: '22px',
-            boxShadow: '0 20px 50px rgba(255, 27, 144, 0.4)',
+            maxWidth: '330px',
+            backgroundColor: '#161924',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '30px',
+            padding: '24px',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.7)',
             display: 'flex',
             flexDirection: 'column',
             gap: '12px',
@@ -1784,34 +1756,34 @@ export default function App() {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Flame size={20} color="#ff1b90" />
+                <Flame size={18} color="#ffffff" />
                 <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800 }}>Wake-Up Missions</h3>
               </div>
-              <X size={20} color="#8d72b2" cursor="pointer" onClick={() => setIsMissionConfigOpen(false)} />
+              <X size={20} color="#7d8396" cursor="pointer" onClick={() => setIsMissionConfigOpen(false)} />
             </div>
 
-            <p style={{ fontSize: '11px', color: '#c7a9e9', margin: 0 }}>
-              Choose which verification steps must be cleared to silence the alarm:
+            <p style={{ fontSize: '11px', color: '#7d8396', margin: 0 }}>
+              Select which verification missions must be cleared to dismiss alarm:
             </p>
 
             <div style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: '#270e44',
-              padding: '10px 12px',
+              backgroundColor: 'rgba(255, 255, 255, 0.04)',
+              padding: '10px 14px',
               borderRadius: '16px',
-              border: enabledMissions.math ? '1px solid #ff1b90' : '1px solid #3d1768'
+              border: enabledMissions.math ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid rgba(255, 255, 255, 0.05)'
             }}>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 800 }}>🧮 1. Math Challenge</div>
-                <div style={{ fontSize: '10px', color: '#8d72b2' }}>Arithmetic calculation</div>
+                <div style={{ fontSize: '10px', color: '#7d8396' }}>Arithmetic calculation</div>
               </div>
               <input
                 type="checkbox"
                 checked={enabledMissions.math}
                 onChange={(e) => setEnabledMissions({ ...enabledMissions, math: e.target.checked })}
-                style={{ width: '18px', height: '18px', accentColor: '#ff1b90', cursor: 'pointer' }}
+                style={{ width: '18px', height: '18px', accentColor: '#ffffff', cursor: 'pointer' }}
               />
             </div>
 
@@ -1819,20 +1791,20 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: '#270e44',
-              padding: '10px 12px',
+              backgroundColor: 'rgba(255, 255, 255, 0.04)',
+              padding: '10px 14px',
               borderRadius: '16px',
-              border: enabledMissions.eyes ? '1px solid #ff1b90' : '1px solid #3d1768'
+              border: enabledMissions.eyes ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid rgba(255, 255, 255, 0.05)'
             }}>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 800 }}>👁️ 2. Both Eyes Open AI</div>
-                <div style={{ fontSize: '10px', color: '#8d72b2' }}>Requires eyes open 1.5s</div>
+                <div style={{ fontSize: '10px', color: '#7d8396' }}>Eyes open for 1.5s</div>
               </div>
               <input
                 type="checkbox"
                 checked={enabledMissions.eyes}
                 onChange={(e) => setEnabledMissions({ ...enabledMissions, eyes: e.target.checked })}
-                style={{ width: '18px', height: '18px', accentColor: '#ff1b90', cursor: 'pointer' }}
+                style={{ width: '18px', height: '18px', accentColor: '#ffffff', cursor: 'pointer' }}
               />
             </div>
 
@@ -1840,20 +1812,20 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: '#270e44',
-              padding: '10px 12px',
+              backgroundColor: 'rgba(255, 255, 255, 0.04)',
+              padding: '10px 14px',
               borderRadius: '16px',
-              border: enabledMissions.voice ? '1px solid #ff1b90' : '1px solid #3d1768'
+              border: enabledMissions.voice ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid rgba(255, 255, 255, 0.05)'
             }}>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 800 }}>🎙️ 3. Voice Passphrase</div>
-                <div style={{ fontSize: '10px', color: '#8d72b2' }}>Speaks phrase to dismiss</div>
+                <div style={{ fontSize: '10px', color: '#7d8396' }}>Speaks phrase to dismiss</div>
               </div>
               <input
                 type="checkbox"
                 checked={enabledMissions.voice}
                 onChange={(e) => setEnabledMissions({ ...enabledMissions, voice: e.target.checked })}
-                style={{ width: '18px', height: '18px', accentColor: '#ff1b90', cursor: 'pointer' }}
+                style={{ width: '18px', height: '18px', accentColor: '#ffffff', cursor: 'pointer' }}
               />
             </div>
 
@@ -1861,20 +1833,20 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: '#270e44',
-              padding: '10px 12px',
+              backgroundColor: 'rgba(255, 255, 255, 0.04)',
+              padding: '10px 14px',
               borderRadius: '16px',
-              border: enabledMissions.dance ? '1px solid #ff1b90' : '1px solid #3d1768'
+              border: enabledMissions.dance ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid rgba(255, 255, 255, 0.05)'
             }}>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 800 }}>💃 4. Morning Dance (15s)</div>
-                <div style={{ fontSize: '10px', color: '#8d72b2' }}>Full body movement & auto song</div>
+                <div style={{ fontSize: '10px', color: '#7d8396' }}>Full body jump & Bollywood beat</div>
               </div>
               <input
                 type="checkbox"
                 checked={enabledMissions.dance}
                 onChange={(e) => setEnabledMissions({ ...enabledMissions, dance: e.target.checked })}
-                style={{ width: '18px', height: '18px', accentColor: '#ff1b90', cursor: 'pointer' }}
+                style={{ width: '18px', height: '18px', accentColor: '#ffffff', cursor: 'pointer' }}
               />
             </div>
 
@@ -1883,17 +1855,17 @@ export default function App() {
               style={{
                 width: '100%',
                 padding: '12px',
-                borderRadius: '14px',
+                borderRadius: '16px',
                 border: 'none',
-                background: 'linear-gradient(135deg, #ff1a8c, #c40b68)',
-                color: '#fff',
+                backgroundColor: '#ffffff',
+                color: '#000000',
                 fontSize: '14px',
                 fontWeight: 800,
                 cursor: 'pointer',
                 marginTop: '4px'
               }}
             >
-              Done & Save
+              Save Configuration
             </button>
           </div>
         </div>
@@ -1904,8 +1876,8 @@ export default function App() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          backgroundColor: 'rgba(10, 2, 20, 0.88)',
-          backdropFilter: 'blur(8px)',
+          backgroundColor: 'rgba(5, 6, 10, 0.85)',
+          backdropFilter: 'blur(16px)',
           zIndex: 110,
           display: 'flex',
           alignItems: 'center',
@@ -1914,12 +1886,12 @@ export default function App() {
         }}>
           <div style={{
             width: '100%',
-            maxWidth: '320px',
-            backgroundColor: '#1b0633',
-            border: '2px solid #3d1768',
-            borderRadius: '28px',
-            padding: '20px',
-            boxShadow: '0 20px 50px rgba(0,0,0,0.7)',
+            maxWidth: '330px',
+            backgroundColor: '#161924',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '30px',
+            padding: '22px',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.7)',
             display: 'flex',
             flexDirection: 'column',
             gap: '12px',
@@ -1929,30 +1901,29 @@ export default function App() {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Music size={18} color="#ff1b90" />
-                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800 }}>Choose Alarm Sound</h3>
+                <Music size={18} color="#ffffff" />
+                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800 }}>Alarm Sound</h3>
               </div>
-              <X size={20} color="#8d72b2" cursor="pointer" onClick={() => setIsSoundSelectorOpen(false)} />
+              <X size={20} color="#7d8396" cursor="pointer" onClick={() => setIsSoundSelectorOpen(false)} />
             </div>
 
             <div style={{
-              border: '2px dashed #ff1b90',
+              border: '1px dashed rgba(255, 255, 255, 0.25)',
               borderRadius: '16px',
               padding: '12px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: '#270e44',
+              backgroundColor: 'rgba(255, 255, 255, 0.03)',
               cursor: 'pointer'
             }}
             onClick={() => fileInputRef.current?.click()}
             >
-              <Upload size={20} color="#ff1b90" />
+              <Upload size={18} color="#ffffff" />
               <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>
                 {customAudioData ? 'Change Custom Song' : '+ Upload Your Own MP3'}
               </span>
-              <span style={{ fontSize: '10px', color: '#c7a9e9' }}>Any song or meme audio</span>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1968,7 +1939,8 @@ export default function App() {
                 style={{
                   padding: '10px 14px',
                   borderRadius: '14px',
-                  backgroundColor: selectedSound === 'custom' ? '#ff1b90' : '#270e44',
+                  backgroundColor: selectedSound === 'custom' ? '#ffffff' : 'rgba(255,255,255,0.05)',
+                  color: selectedSound === 'custom' ? '#000000' : '#ffffff',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -1977,13 +1949,13 @@ export default function App() {
                   fontSize: '13px'
                 }}
               >
-                <span>⭐ My Custom Uploaded Song</span>
+                <span>⭐ Custom Uploaded Song</span>
                 {selectedSound === 'custom' && <Check size={16} />}
               </div>
             )}
 
-            <div style={{ fontSize: '11px', color: '#ff79c6', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', marginTop: '4px' }}>
-              Folder Prank & Meme Sounds
+            <div style={{ fontSize: '10px', color: '#7d8396', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', marginTop: '4px' }}>
+              Prank & Viral Sounds
             </div>
 
             {DEFAULT_SOUNDS.filter(s => s.category === 'prank').map((sound) => (
@@ -1993,60 +1965,8 @@ export default function App() {
                 style={{
                   padding: '10px 14px',
                   borderRadius: '14px',
-                  backgroundColor: selectedSound === sound.id ? '#ff1b90' : '#270e44',
-                  border: '1px solid #3d1768',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  fontSize: '13px',
-                  fontWeight: 600
-                }}
-              >
-                <span>{sound.name}</span>
-                {selectedSound === sound.id && <Check size={16} />}
-              </div>
-            ))}
-
-            <div style={{ fontSize: '11px', color: '#a58ec4', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', marginTop: '4px' }}>
-              5 Standard Ringtones
-            </div>
-
-            {DEFAULT_SOUNDS.filter(s => s.category === 'default').map((sound) => (
-              <div
-                key={sound.id}
-                onClick={() => handleSelectSound(sound.id)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '14px',
-                  backgroundColor: selectedSound === sound.id ? '#ff1b90' : '#270e44',
-                  border: '1px solid #3d1768',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  fontSize: '13px',
-                  fontWeight: 600
-                }}
-              >
-                <span>{sound.name}</span>
-                {selectedSound === sound.id && <Check size={16} />}
-              </div>
-            ))}
-
-            <div style={{ fontSize: '11px', color: '#10b981', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', marginTop: '4px' }}>
-              5 Soft & Relaxing Sounds
-            </div>
-
-            {DEFAULT_SOUNDS.filter(s => s.category === 'relaxing').map((sound) => (
-              <div
-                key={sound.id}
-                onClick={() => handleSelectSound(sound.id)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '14px',
-                  backgroundColor: selectedSound === sound.id ? '#ff1b90' : '#270e44',
-                  border: '1px solid #3d1768',
+                  backgroundColor: selectedSound === sound.id ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                  border: selectedSound === sound.id ? '1px solid rgba(255, 255, 255, 0.3)' : '1px solid transparent',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -2068,8 +1988,8 @@ export default function App() {
         <div style={{
           position: 'fixed',
           inset: 0,
-          backgroundColor: 'rgba(10, 2, 20, 0.8)',
-          backdropFilter: 'blur(6px)',
+          backgroundColor: 'rgba(5, 6, 10, 0.85)',
+          backdropFilter: 'blur(16px)',
           zIndex: 90,
           display: 'flex',
           alignItems: 'center',
@@ -2080,12 +2000,12 @@ export default function App() {
             onSubmit={handleAddNewAlarm}
             style={{
               width: '100%',
-              maxWidth: '300px',
-              backgroundColor: '#1b0633',
-              border: '2px solid #3d1768',
+              maxWidth: '320px',
+              backgroundColor: '#161924',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
               borderRadius: '28px',
               padding: '24px',
-              boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.7)',
               display: 'flex',
               flexDirection: 'column',
               gap: '14px',
@@ -2094,11 +2014,11 @@ export default function App() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800 }}>New Alarm</h3>
-              <X size={20} color="#8d72b2" cursor="pointer" onClick={() => setIsAddModalOpen(false)} />
+              <X size={20} color="#7d8396" cursor="pointer" onClick={() => setIsAddModalOpen(false)} />
             </div>
 
             <div>
-              <label style={{ fontSize: '11px', color: '#c7a9e9', display: 'block', marginBottom: '6px' }}>Time</label>
+              <label style={{ fontSize: '11px', color: '#7d8396', display: 'block', marginBottom: '6px' }}>Time</label>
               <input
                 type="time"
                 value={newAlarmTime}
@@ -2107,9 +2027,9 @@ export default function App() {
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  borderRadius: '12px',
-                  backgroundColor: '#270e44',
-                  border: '1px solid #4a1e7d',
+                  borderRadius: '14px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
                   color: '#fff',
                   fontSize: '16px',
                   boxSizing: 'border-box',
@@ -2119,7 +2039,7 @@ export default function App() {
             </div>
 
             <div>
-              <label style={{ fontSize: '11px', color: '#c7a9e9', display: 'block', marginBottom: '6px' }}>Label / Days</label>
+              <label style={{ fontSize: '11px', color: '#7d8396', display: 'block', marginBottom: '6px' }}>Label / Days</label>
               <input
                 type="text"
                 placeholder="e.g. Work, Gym, Sat-Sun"
@@ -2128,9 +2048,9 @@ export default function App() {
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  borderRadius: '12px',
-                  backgroundColor: '#270e44',
-                  border: '1px solid #4a1e7d',
+                  borderRadius: '14px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
                   color: '#fff',
                   fontSize: '13px',
                   boxSizing: 'border-box',
@@ -2140,20 +2060,20 @@ export default function App() {
             </div>
 
             <div>
-              <label style={{ fontSize: '11px', color: '#ff79c6', display: 'block', marginBottom: '6px', fontWeight: 700 }}>
-                Wake-Up Note / Reason
+              <label style={{ fontSize: '11px', color: '#ffffff', display: 'block', marginBottom: '6px', fontWeight: 700 }}>
+                Wake-Up Purpose / Reason
               </label>
               <input
                 type="text"
-                placeholder="e.g. Flight at 8 AM / Gym day!"
+                placeholder="e.g. 7 AM Flight / Gym session"
                 value={newAlarmCustomNote}
                 onChange={(e) => setNewAlarmCustomNote(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  borderRadius: '12px',
-                  backgroundColor: '#270e44',
-                  border: '1px solid #ff1b90',
+                  borderRadius: '14px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
                   color: '#fff',
                   fontSize: '13px',
                   boxSizing: 'border-box',
@@ -2167,15 +2087,14 @@ export default function App() {
               style={{
                 width: '100%',
                 padding: '12px',
-                borderRadius: '14px',
+                borderRadius: '16px',
                 border: 'none',
-                background: 'linear-gradient(135deg, #ff1a8c, #c40b68)',
-                color: '#fff',
+                backgroundColor: '#ffffff',
+                color: '#000000',
                 fontSize: '14px',
-                fontWeight: 700,
+                fontWeight: 800,
                 cursor: 'pointer',
-                marginTop: '6px',
-                boxShadow: '0 6px 18px rgba(255,26,140,0.4)'
+                marginTop: '6px'
               }}
             >
               Add Alarm
@@ -2184,13 +2103,13 @@ export default function App() {
         </div>
       )}
 
-      {/* ==================== 2-PAGE MOBILE CARD FRAME ==================== */}
+      {/* ==================== MAIN ULTRA-AESTHETIC CARD CONTAINER ==================== */}
       <div style={{
         width: '100%',
         maxWidth: '410px',
         minHeight: '100dvh',
-        backgroundColor: '#120324',
-        padding: '18px 18px 12px 18px',
+        backgroundColor: '#0c0e15',
+        padding: '24px 20px 16px 20px',
         color: '#ffffff',
         display: 'flex',
         flexDirection: 'column',
@@ -2201,30 +2120,68 @@ export default function App() {
         {/* ================= PAGE 1: SLEEP TIME ================= */}
         {activeTab === 'sleep' && (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
+            
+            {/* Top Bar (Matches Screenshot) */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', gap: '3px', opacity: 0.75 }}>
-                <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
-                <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
-                <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
+              <div>
+                <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, letterSpacing: '-0.5px' }}>
+                  Good evening
+                </h2>
+                <span style={{ fontSize: '12px', color: '#7d8396', fontWeight: 600 }}>
+                  Sunday, 25 Oct
+                </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, letterSpacing: '0.4px' }}>CogniWake</h2>
-                {syncStatus === 'saving' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#f59e0b' }} />}
-                {syncStatus === 'synced' && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }} />}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => setIsMissionConfigOpen(true)}
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '12px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Calendar size={17} />
+                </button>
+                <button
+                  onClick={() => triggerAlarmRing('CogniWake Mission', alarmNote)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '12px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#fff',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Test Ring
+                </button>
               </div>
-              <span
-                onClick={() => triggerAlarmRing('CogniWake Mission', alarmNote)}
-                style={{ fontSize: '13px', color: '#ff1b90', fontWeight: 800, cursor: 'pointer' }}
-              >
-                Test Ring
-              </span>
             </div>
 
-            {/* Dial with Exact Center & Handle Math */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '8px 0' }}>
-              <div ref={dialRef} style={{ position: 'relative', width: '190px', height: '190px', display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'none' }}>
-                <div style={{ position: 'absolute', inset: '10px', borderRadius: '50%', border: '12px solid #230a40', boxSizing: 'border-box' }} />
-
+            {/* Central Glow Sphere & Sleep Dial */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '14px 0' }}>
+              <div ref={dialRef} style={{
+                position: 'relative',
+                width: '230px',
+                height: '230px',
+                borderRadius: '50%',
+                background: 'radial-gradient(circle at 50% 30%, #202438 0%, #12141e 80%)',
+                boxShadow: '0 0 50px rgba(139, 122, 255, 0.12), inset 0 0 20px rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                touchAction: 'none'
+              }}>
                 <svg 
                   style={{ 
                     position: 'absolute', 
@@ -2232,54 +2189,60 @@ export default function App() {
                     width: '100%', 
                     height: '100%', 
                     transform: `rotate(${bedAngle - 90}deg)`, 
-                    transformOrigin: '95px 95px',
+                    transformOrigin: '115px 115px',
                     pointerEvents: 'none' 
                   }} 
-                  viewBox="0 0 190 190"
+                  viewBox="0 0 230 230"
                 >
                   <defs>
-                    <linearGradient id="neonPink" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#ff1b90" />
-                      <stop offset="100%" stopColor="#d81075" />
+                    <linearGradient id="moonGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#ffffff" />
+                      <stop offset="100%" stopColor="#8b7aff" />
                     </linearGradient>
                   </defs>
                   <circle
-                    cx="95"
-                    cy="95"
-                    r="84"
+                    cx="115"
+                    cy="115"
+                    r="102"
                     fill="none"
-                    stroke="url(#neonPink)"
-                    strokeWidth="12"
-                    strokeDasharray={2 * Math.PI * 84}
-                    strokeDashoffset={(2 * Math.PI * 84) - (((wakeAngle - bedAngle + 360) % 360) / 360) * (2 * Math.PI * 84)}
+                    stroke="url(#moonGlow)"
+                    strokeWidth="4"
+                    strokeDasharray={2 * Math.PI * 102}
+                    strokeDashoffset={(2 * Math.PI * 102) - (((wakeAngle - bedAngle + 360) % 360) / 360) * (2 * Math.PI * 102)}
                     strokeLinecap="round"
-                    style={{ filter: 'drop-shadow(0 0 10px rgba(255, 27, 144, 0.9))' }}
+                    style={{ filter: 'drop-shadow(0 0 8px rgba(139, 122, 255, 0.8))' }}
                   />
                 </svg>
 
+                {/* Central Info Display */}
                 <div style={{
-                  width: '118px',
-                  height: '118px',
-                  backgroundColor: '#ffffff',
-                  borderRadius: '50%',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  position: 'relative',
-                  boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.1)',
                   pointerEvents: 'none'
                 }}>
-                  <span style={{ position: 'absolute', top: '7px', fontSize: '9px', fontWeight: 800, color: '#666' }}>12</span>
-                  <span style={{ position: 'absolute', right: '9px', fontSize: '9px', fontWeight: 800, color: '#666' }}>3</span>
-                  <span style={{ position: 'absolute', bottom: '7px', fontSize: '9px', fontWeight: 800, color: '#666' }}>▲</span>
-                  <span style={{ position: 'absolute', left: '9px', fontSize: '9px', fontWeight: 800, color: '#666' }}>9</span>
+                  <Moon size={22} color="#a495ff" style={{ marginBottom: '8px' }} />
 
-                  <div style={{ fontSize: '26px', fontWeight: 900, color: '#120324', lineHeight: 1, letterSpacing: '-0.5px' }}>
-                    {sleepDuration.hrs}<span style={{ fontSize: '13px', fontWeight: 700, color: '#555', marginLeft: '2px' }}>hr</span>
+                  <div style={{ fontSize: '34px', fontWeight: 900, color: '#ffffff', lineHeight: 1, letterSpacing: '-1px' }}>
+                    {sleepDuration.hrs}<span style={{ fontSize: '15px', fontWeight: 600, color: '#7d8396', marginLeft: '2px', marginRight: '6px' }}>hr</span>
+                    {sleepDuration.mins}<span style={{ fontSize: '15px', fontWeight: 600, color: '#7d8396', marginLeft: '2px' }}>min</span>
                   </div>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#888', marginTop: '2px' }}>
-                    {sleepDuration.mins} min
+
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#7d8396', marginTop: '6px' }}>
+                    Your target sleep
+                  </span>
+
+                  <div style={{
+                    marginTop: '10px',
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: '#e2e5f0'
+                  }}>
+                    98% Sleep Score
                   </div>
                 </div>
 
@@ -2289,24 +2252,18 @@ export default function App() {
                   onTouchStart={() => setActiveHandle('bed')}
                   style={{
                     position: 'absolute',
-                    left: `${95 + 84 * Math.cos((bedAngle - 90) * (Math.PI / 180))}px`,
-                    top: `${95 + 84 * Math.sin((bedAngle - 90) * (Math.PI / 180))}px`,
+                    left: `${115 + 102 * Math.cos((bedAngle - 90) * (Math.PI / 180))}px`,
+                    top: `${115 + 102 * Math.sin((bedAngle - 90) * (Math.PI / 180))}px`,
                     transform: 'translate(-50%, -50%)',
-                    width: '22px',
-                    height: '22px',
+                    width: '18px',
+                    height: '18px',
                     borderRadius: '50%',
                     backgroundColor: '#ffffff',
-                    border: '2px solid #ff1b90',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 0 12px rgba(255, 27, 144, 0.8)',
+                    boxShadow: '0 0 14px rgba(255, 255, 255, 0.9)',
                     cursor: 'grab',
                     zIndex: 10
                   }}
-                >
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#120324' }} />
-                </div>
+                />
 
                 {/* Wake Handle */}
                 <div
@@ -2314,97 +2271,151 @@ export default function App() {
                   onTouchStart={() => setActiveHandle('wake')}
                   style={{
                     position: 'absolute',
-                    left: `${95 + 84 * Math.cos((wakeAngle - 90) * (Math.PI / 180))}px`,
-                    top: `${95 + 84 * Math.sin((wakeAngle - 90) * (Math.PI / 180))}px`,
+                    left: `${115 + 102 * Math.cos((wakeAngle - 90) * (Math.PI / 180))}px`,
+                    top: `${115 + 102 * Math.sin((wakeAngle - 90) * (Math.PI / 180))}px`,
                     transform: 'translate(-50%, -50%)',
-                    width: '22px',
-                    height: '22px',
+                    width: '18px',
+                    height: '18px',
                     borderRadius: '50%',
-                    backgroundColor: '#ff1b90',
+                    backgroundColor: '#8b7aff',
                     border: '2px solid #ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 0 12px rgba(255, 27, 144, 0.8)',
+                    boxShadow: '0 0 14px rgba(139, 122, 255, 0.9)',
                     cursor: 'grab',
                     zIndex: 10
                   }}
-                >
-                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
+                />
+              </div>
+            </div>
+
+            {/* Weekly Consistency Score Strip (From Screenshot) */}
+            {renderWeeklyConsistencyPills()}
+
+            {/* Somnia Smart Habit Card (From Screenshot) */}
+            <div style={{
+              backgroundColor: 'rgba(23, 26, 38, 0.7)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '22px',
+              padding: '14px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '14px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Sparkles size={22} color="#ffffff" style={{ flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: '10px', textTransform: 'uppercase', color: '#7d8396', fontWeight: 800, letterSpacing: '0.6px' }}>
+                    CogniWake Rule
+                  </div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#e2e5f0', lineHeight: 1.3, marginTop: '2px' }}>
+                    Consistent wake times build unbreakable morning momentum.
+                  </div>
                 </div>
               </div>
+              <ChevronRight size={16} color="#7d8396" />
+            </div>
 
-              {/* Bedtime & Wake Cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%', marginTop: '10px' }}>
-                <div style={{
-                  position: 'relative',
-                  background: 'linear-gradient(135deg, #ff1a8c 0%, #c40b68 100%)',
-                  padding: '12px 10px',
-                  borderRadius: '16px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  boxShadow: '0 6px 20px rgba(255, 26, 140, 0.4)'
-                }}>
-                  <span style={{ fontSize: '10px', color: '#ffd0eb', fontWeight: 600 }}>BedTime</span>
-                  <span style={{ fontSize: '18px', fontWeight: 800 }}>{angleToTime(bedAngle)}</span>
+            {/* Daily Tasks / Missions Cards (From Screenshot) */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+                <span style={{ fontSize: '15px', fontWeight: 800 }}>Daily Missions</span>
+                <span style={{ fontSize: '11px', color: '#7d8396', fontWeight: 700, backgroundColor: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: '8px' }}>
+                  4/4
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div 
+                  onClick={() => setIsMissionConfigOpen(true)}
+                  style={{
+                    backgroundColor: 'rgba(23, 26, 38, 0.7)',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderRadius: '18px',
+                    padding: '12px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <BookOpen size={18} color="#a495ff" />
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#e2e5f0' }}>Brain Math & Eye</span>
+                  <span style={{ fontSize: '10px', color: '#7d8396' }}>Awakens alertness</span>
                 </div>
 
-                <div style={{
-                  position: 'relative',
-                  backgroundColor: '#1e0935',
-                  border: '1px solid #37145b',
-                  padding: '12px 10px',
-                  borderRadius: '16px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center'
-                }}>
-                  <span style={{ fontSize: '10px', color: '#8d72b2', fontWeight: 600 }}>Wake up</span>
-                  <span style={{ fontSize: '18px', fontWeight: 800, color: '#eeeeee' }}>{angleToTime(wakeAngle)}</span>
+                <div 
+                  onClick={() => setIsMissionConfigOpen(true)}
+                  style={{
+                    backgroundColor: 'rgba(23, 26, 38, 0.7)',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderRadius: '18px',
+                    padding: '12px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Layers size={18} color="#a495ff" />
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#e2e5f0' }}>Voice & Dance</span>
+                  <span style={{ fontSize: '10px', color: '#7d8396' }}>Forces out of bed</span>
                 </div>
               </div>
             </div>
 
-            {/* NEW: WEEKLY MINI CALENDAR STRIP */}
-            {renderMiniCalendar()}
+          </div>
+        )}
 
-            {/* Controls */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
-              
-              <div 
-                onClick={() => setIsMissionConfigOpen(true)}
+        {/* ================= PAGE 2: ALARMS LIST & CONTROLS ================= */}
+        {activeTab === 'alarms' && (
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, letterSpacing: '-0.5px' }}>Alarms</h2>
+                <span style={{ fontSize: '12px', color: '#7d8396', fontWeight: 600 }}>Active Schedules</span>
+              </div>
+              <button
+                onClick={() => setIsAddModalOpen(true)}
                 style={{
-                  backgroundColor: '#200938',
-                  border: '1px solid #3d1768',
-                  borderRadius: '14px',
-                  padding: '10px 12px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  cursor: 'pointer'
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#ffffff'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Flame size={15} color="#ff1b90" />
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#ffd0eb' }}>Missions Settings</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#a58ec4' }}>
-                  <span>{buildPipeline().length} Active</span>
-                  <ChevronRight size={13} />
-                </div>
-              </div>
+                <Plus size={18} />
+              </button>
+            </div>
 
+            {/* Quick Master Switch & Sound Selector */}
+            <div style={{
+              backgroundColor: 'rgba(23, 26, 38, 0.7)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '22px',
+              padding: '14px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              margin: '16px 0'
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#e0d5ed' }}>Set alarm</span>
+                <div>
+                  <span style={{ fontSize: '13px', fontWeight: 800 }}>Master Alarm</span>
+                  <div style={{ fontSize: '10px', color: '#7d8396' }}>Toggle all upcoming triggers</div>
+                </div>
                 <div
                   onClick={() => setAlarmEnabled(!alarmEnabled)}
                   style={{
                     width: '42px',
                     height: '24px',
                     borderRadius: '12px',
-                    backgroundColor: alarmEnabled ? '#ff1b90' : '#270e44',
-                    boxShadow: alarmEnabled ? '0 0 10px rgba(255, 27, 144, 0.6)' : 'none',
+                    backgroundColor: alarmEnabled ? '#ffffff' : 'rgba(255,255,255,0.1)',
                     display: 'flex',
                     alignItems: 'center',
                     padding: '2px',
@@ -2414,158 +2425,89 @@ export default function App() {
                     transition: 'all 0.2s'
                   }}
                 >
-                  <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
+                  <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: alarmEnabled ? '#000000' : '#ffffff' }} />
                 </div>
               </div>
 
-              {/* Sound & Slider */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', color: '#8d72b2', fontWeight: 600 }}>
-                  <div 
-                    onClick={() => setIsSoundSelectorOpen(true)}
-                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', color: '#ff79c6' }}
-                  >
-                    <span>Sound: <strong>{getSoundDisplayName()}</strong></span>
-                    <ChevronRight size={13} />
-                  </div>
-                  <button
-                    onClick={handleTogglePreview}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      color: isPlayingPreview ? '#ff1b90' : '#fff',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      padding: 0
-                    }}
-                  >
-                    {isPlayingPreview ? <Volume2 size={13} color="#ff1b90" /> : <VolumeX size={13} color="#8d72b2" />}
-                    <span>{isPlayingPreview ? 'Stop' : 'Preview'}</span>
-                  </button>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', color: '#7d8396', fontWeight: 600 }}>
+                <div 
+                  onClick={() => setIsSoundSelectorOpen(true)}
+                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', color: '#fff' }}
+                >
+                  <span>Sound: <strong>{getSoundDisplayName()}</strong></span>
+                  <ChevronRight size={13} />
                 </div>
-
-                <div style={{ position: 'relative', width: '100%', height: '6px', backgroundColor: '#270e44', borderRadius: '3px', display: 'flex', alignItems: 'center' }}>
-                  <div style={{ height: '100%', width: `${volume}%`, background: 'linear-gradient(90deg, #d81075, #ff1b90)', borderRadius: '3px' }} />
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={volume}
-                    onChange={(e) => handleVolumeChange(e.target.value)}
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
-                  />
-                  <div style={{
-                    position: 'absolute',
-                    left: `${volume}%`,
-                    transform: 'translateX(-50%)',
-                    width: '14px',
-                    height: '14px',
-                    borderRadius: '50%',
-                    backgroundColor: '#ff1b90',
-                    border: '2px solid #ffffff',
-                    boxShadow: '0 0 8px rgba(255, 27, 144, 0.8)',
-                    pointerEvents: 'none'
-                  }} />
-                </div>
+                <button
+                  onClick={handleTogglePreview}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    color: isPlayingPreview ? '#ffffff' : '#7d8396',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    padding: 0
+                  }}
+                >
+                  {isPlayingPreview ? <Volume2 size={13} color="#ffffff" /> : <VolumeX size={13} color="#7d8396" />}
+                  <span>{isPlayingPreview ? 'Stop' : 'Preview'}</span>
+                </button>
               </div>
 
-            </div>
-          </div>
-        )}
-
-        {/* ================= PAGE 2: ALARMS LIST & SETTINGS ================= */}
-        {activeTab === 'alarms' && (
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', gap: '3px', opacity: 0.75 }}>
-                <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
-                <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
-                <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
-              </div>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, letterSpacing: '0.4px' }}>Alarms</h2>
-              <button
-                onClick={() => setIsAddModalOpen(true)}
-                style={{
-                  background: 'rgba(255, 27, 144, 0.15)',
-                  border: '1px solid rgba(255, 27, 144, 0.4)',
-                  borderRadius: '50%',
-                  width: '28px',
-                  height: '28px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: '#ff1b90'
-                }}
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '14px 0' }}>
-              <div style={{ position: 'relative', width: '100px', height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <div style={{
-                  width: '80px',
-                  height: '80px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #fbcfe8 0%, #e879f9 50%, #c084fc 100%)',
-                  boxShadow: '0 0 35px rgba(232, 121, 249, 0.65)',
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}>
-                  <div style={{ position: 'absolute', top: '16px', left: '20px', width: '18px', height: '18px', borderRadius: '50%', backgroundColor: 'rgba(217, 70, 239, 0.3)' }} />
-                  <div style={{ position: 'absolute', bottom: '16px', right: '22px', width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(217, 70, 239, 0.25)' }} />
-                  <div style={{ position: 'absolute', top: '-15px', left: '-15px', width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#120324' }} />
-                </div>
-              </div>
-
-              <span style={{ fontSize: '11px', color: '#8d72b2', fontWeight: 600, marginTop: '4px' }}>Total Target Sleep</span>
-              <div style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.5px', marginTop: '2px' }}>
-                {sleepDuration.hrs}<span style={{ fontSize: '14px', fontWeight: 700, color: '#bbb' }}>hr</span> {sleepDuration.mins}<span style={{ fontSize: '14px', fontWeight: 700, color: '#bbb' }}>min</span>
+              <div style={{ position: 'relative', width: '100%', height: '5px', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '3px', display: 'flex', alignItems: 'center' }}>
+                <div style={{ height: '100%', width: `${volume}%`, backgroundColor: '#ffffff', borderRadius: '3px' }} />
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={volume}
+                  onChange={(e) => handleVolumeChange(e.target.value)}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+                />
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: '4px', paddingRight: '4px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#8d72b2' }}>Configured Alarms</span>
-                <span style={{ fontSize: '11px', color: '#ff1b90', fontWeight: 800, cursor: 'pointer' }} onClick={() => setIsAddModalOpen(true)}>+ Add New</span>
+            {/* Saved Alarms List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#7d8396' }}>Configured Wake-Ups</span>
+                <span style={{ fontSize: '11px', color: '#ffffff', fontWeight: 700, cursor: 'pointer' }} onClick={() => setIsAddModalOpen(true)}>+ Add New</span>
               </div>
 
               {alarms.map((alarm) => (
                 <div
                   key={alarm.id}
                   style={{
-                    backgroundColor: '#1e0935',
-                    border: '1px solid #37145b',
-                    borderRadius: '16px',
-                    padding: '12px 14px',
+                    backgroundColor: 'rgba(23, 26, 38, 0.7)',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderRadius: '20px',
+                    padding: '14px 16px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between'
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: '18px', fontWeight: 900, color: alarm.active ? '#ffffff' : '#73618a' }}>{alarm.time}</div>
-                    <div style={{ fontSize: '10px', color: '#ff79c6', fontWeight: 700 }}>{alarm.note || alarm.label}</div>
+                    <div style={{ fontSize: '20px', fontWeight: 900, color: alarm.active ? '#ffffff' : '#575c6e' }}>{alarm.time}</div>
+                    <div style={{ fontSize: '11px', color: '#8b92a8', fontWeight: 600 }}>{alarm.note || alarm.label}</div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {!alarm.isDialSync && (
-                      <button onClick={() => deleteAlarm(alarm.id)} style={{ background: 'none', border: 'none', color: '#654f7a', cursor: 'pointer' }}>
-                        <Trash2 size={15} />
+                      <button onClick={() => deleteAlarm(alarm.id)} style={{ background: 'none', border: 'none', color: '#575c6e', cursor: 'pointer' }}>
+                        <Trash2 size={16} />
                       </button>
                     )}
                     <div
                       onClick={() => toggleAlarm(alarm.id)}
                       style={{
-                        width: '40px',
-                        height: '22px',
-                        borderRadius: '11px',
-                        backgroundColor: alarm.active ? '#ff1b90' : '#140428',
+                        width: '42px',
+                        height: '24px',
+                        borderRadius: '12px',
+                        backgroundColor: alarm.active ? '#ffffff' : 'rgba(255,255,255,0.08)',
                         display: 'flex',
                         alignItems: 'center',
                         padding: '2px',
@@ -2574,23 +2516,24 @@ export default function App() {
                         justifyContent: alarm.active ? 'flex-end' : 'flex-start'
                       }}
                     >
-                      <div style={{ width: '18px', height: '18px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
+                      <div style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: alarm.active ? '#000000' : '#ffffff' }} />
                     </div>
                   </div>
                 </div>
               ))}
             </div>
+
           </div>
         )}
 
-        {/* ================= BOTTOM BAR (PAGE 1 & 2 SWITCHER) ================= */}
+        {/* ================= BOTTOM GLASS NAVIGATION (From Screenshot) ================= */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-around',
           alignItems: 'center',
-          paddingTop: '10px',
-          borderTop: '1px solid #2b124a',
-          marginTop: '10px',
+          paddingTop: '12px',
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          marginTop: '12px',
           position: 'relative',
           zIndex: 5
         }}>
@@ -2603,12 +2546,12 @@ export default function App() {
               flexDirection: 'column',
               alignItems: 'center',
               gap: '4px',
-              color: activeTab === 'sleep' ? '#ff1b90' : '#8d72b2',
+              color: activeTab === 'sleep' ? '#ffffff' : '#575c6e',
               cursor: 'pointer'
             }}
           >
-            <Moon size={19} />
-            <span style={{ fontSize: '11px', fontWeight: 700 }}>Sleep</span>
+            <Moon size={20} />
+            <span style={{ fontSize: '11px', fontWeight: 700 }}>Today</span>
           </button>
           
           <button
@@ -2620,11 +2563,11 @@ export default function App() {
               flexDirection: 'column',
               alignItems: 'center',
               gap: '4px',
-              color: activeTab === 'alarms' ? '#ff1b90' : '#8d72b2',
+              color: activeTab === 'alarms' ? '#ffffff' : '#575c6e',
               cursor: 'pointer'
             }}
           >
-            <Bell size={19} />
+            <Bell size={20} />
             <span style={{ fontSize: '11px', fontWeight: 700 }}>Alarms</span>
           </button>
         </div>
