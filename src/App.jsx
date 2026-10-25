@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   ChevronRight, Volume2, VolumeX, BellRing, Plus, Trash2, X, Check, 
-  RefreshCw, Moon, Bell, Camera, Mic, Upload, Music, Flame, FileText, Activity
+  RefreshCw, Moon, Bell, Camera, Mic, Upload, Music, Flame, FileText, Activity, Shuffle
 } from 'lucide-react';
-import { FilesetResolver, FaceLandmarker } from '@mediapipe/tasks-vision';
+import { FilesetResolver, FaceLandmarker, PoseLandmarker } from '@mediapipe/tasks-vision';
 import { supabase } from './supabase';
 
-const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v9';
+const LOCAL_STORAGE_KEY = 'cogniwake_alarm_state_v11';
 const USER_ID_KEY = 'cogniwake_user_uid_v1';
 const CUSTOM_AUDIO_KEY = 'cogniwake_custom_audio_cache_v1';
 
@@ -18,7 +18,16 @@ const WAKE_PHRASES = [
   "today is a brand new opportunity"
 ];
 
-// Full 22 Sounds Library
+// 5 Dedicated Bollywood Dance Tracks for Mission 4
+const DANCE_PLAYLIST = [
+  { id: 'bollywood', name: '🥁 Energetic Bollywood Track', src: '/sounds/Energetic Bollywood Track.mp3' },
+  { id: 'disco', name: '💃 Kisi Disco Me Jaye', src: '/sounds/kisi disco me jaye.mp3' },
+  { id: 'nacho', name: '🕺 Hil Hil Ke Nacho', src: '/sounds/Hil Hil ke Nacho Nacho.mp3' },
+  { id: 'zohrajabeen', name: '✨ Aye Meri Zohrajabeen', src: '/sounds/Aye Meri Zohrajabeen.mp3' },
+  { id: 'oyehoye', name: '🔥 Oye Hoye Kya Baat Hai', src: '/sounds/oye hoye kya.mp3' }
+];
+
+// Full 22 Sounds Library for Alarm Ring
 const DEFAULT_SOUNDS = [
   { id: 'america', name: '🎙️ America Kya Kehta Tha', type: 'audio', src: '/sounds/America Kya Kehta Tha.mp3', category: 'prank' },
   { id: 'baby_crying', name: '👶 Baby Crying Tears', type: 'audio', src: '/sounds/Baby Crying Tears.mp3', category: 'prank' },
@@ -53,10 +62,13 @@ export default function App() {
   const [alarmEnabled, setAlarmEnabled] = useState(true);
   const [volume, setVolume] = useState(75);
 
+  // Strict 1-Minute Snooze Control
   const [strictSnoozeEnabled, setStrictSnoozeEnabled] = useState(false);
   const [snoozeCountdown, setSnoozeCountdown] = useState(null);
   const snoozeTimerRef = useRef(null);
+  const snoozeEndTimeRef = useRef(null);
 
+  // Wake-Up Note Feature
   const [alarmNote, setAlarmNote] = useState('Gym & Morning Workout!');
   const [activeRingingNote, setActiveRingingNote] = useState('');
 
@@ -68,6 +80,9 @@ export default function App() {
     dance: true
   });
   const [isMissionConfigOpen, setIsMissionConfigOpen] = useState(false);
+
+  // Current Active Dance Track (Auto-shuffled or user chosen)
+  const [currentDanceTrackId, setCurrentDanceTrackId] = useState('bollywood');
 
   const [selectedSound, setSelectedSound] = useState('chicken_screaming');
   const [customAudioData, setCustomAudioData] = useState(null);
@@ -110,7 +125,7 @@ export default function App() {
   const animFrameIdRef = useRef(null);
   const eyesOpenDurationRef = useRef(0);
 
-  // Step 3: Strict Voice Matching with Synchronous Ref
+  // Step 3: Voice State & Engine
   const [targetVoicePhrase, setTargetVoicePhrase] = useState(WAKE_PHRASES[0]);
   const targetVoicePhraseRef = useRef(WAKE_PHRASES[0]);
   const [transcript, setTranscript] = useState('');
@@ -123,14 +138,17 @@ export default function App() {
   const micAnimRef = useRef(null);
   const manualStopRef = useRef(false);
 
-  // Step 4: Dance / Full Body Motion State & Refs
+  // Step 4: Strict Full-Body Dance State & Refs
   const danceVideoRef = useRef(null);
-  const [danceStream, setDanceStream] = useState(null);
+  const danceCanvasRef = useRef(null);
+  const danceStreamRef = useRef(null);
+  const danceAudioRef = useRef(null);
+  const poseLandmarkerRef = useRef(null);
   const [danceProgress, setDanceProgress] = useState(0);
-  const [danceStatus, setDanceStatus] = useState('Step back & start dancing!');
+  const [danceStatus, setDanceStatus] = useState('Step back & show full body!');
   const danceAnimRef = useRef(null);
   const danceScoreRef = useRef(0);
-  const prevFrameDataRef = useRef(null);
+  const previousFullBodyLandmarksRef = useRef(null);
 
   // Audio Engine Refs
   const audioCtxRef = useRef(null);
@@ -590,7 +608,7 @@ export default function App() {
     }
   }, [modelReady]);
 
-  // STEP 3: STRICT VOICE MATCHING (Speech-Only, Zero Noise Bypass)
+  // STEP 3: HIGH-ACCURACY VOICE RECOGNITION
   const stopMicrophoneEngine = () => {
     manualStopRef.current = true;
     setIsListening(false);
@@ -619,8 +637,14 @@ export default function App() {
 
     stopMelodyLoop();
 
+    let recognizedSpeechPassed = false;
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (manualStopRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       micStreamRef.current = stream;
 
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -647,8 +671,8 @@ export default function App() {
       };
       analyzeAudio();
     } catch (err) {
+      stopMicrophoneEngine();
       setVoiceError('Microphone permission blocked! Allow mic.');
-      setIsListening(false);
       startMelodyLoop();
       return;
     }
@@ -663,27 +687,32 @@ export default function App() {
         recognition.interimResults = true;
 
         recognition.onresult = (event) => {
-          let heard = '';
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            heard += event.results[i][0].transcript;
-          }
-          heard = heard.toLowerCase().replace(/[.,!?-]/g, '').trim();
-          setTranscript(heard);
+          if (manualStopRef.current || recognizedSpeechPassed) return;
 
-          const currentTarget = (targetVoicePhraseRef.current || targetVoicePhrase)
+          let heardText = '';
+          for (let i = 0; i < event.results.length; ++i) {
+            heardText += event.results[i][0].transcript + ' ';
+          }
+          
+          const cleanString = (val) => val
             .toLowerCase()
-            .replace(/[.,!?-]/g, '')
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .replace(/\s+/g, ' ')
             .trim();
 
-          const targetWords = currentTarget.split(/\s+/).filter((w) => w.length > 2);
-          const heardWords = heard.split(/\s+/);
+          const normalizedHeard = cleanString(heardText);
+          const normalizedTarget = cleanString(targetVoicePhraseRef.current || targetVoicePhrase);
+          setTranscript(normalizedHeard);
 
-          // STRICT CHECK: Kam se kam 3 meaningful target words hone chahiye
-          const matchedWordsCount = targetWords.filter((w) =>
-            heardWords.some((hw) => hw === w || hw.includes(w) || w.includes(hw))
-          ).length;
+          const targetTokens = normalizedTarget.split(' ').filter(w => w.length >= 3);
+          const heardTokens = normalizedHeard.split(' ').filter(w => w.length >= 3);
 
-          if (matchedWordsCount >= Math.min(3, targetWords.length) || heard.includes(currentTarget)) {
+          const matchedWords = targetTokens.filter(tw => 
+            heardTokens.some(hw => hw === tw || hw.includes(tw) || tw.includes(hw))
+          );
+
+          if (matchedWords.length >= 2 || (targetTokens.length <= 3 && matchedWords.length >= 1) || normalizedHeard.includes(normalizedTarget)) {
+            recognizedSpeechPassed = true;
             manualStopRef.current = true;
             advancePipeline();
           }
@@ -694,96 +723,254 @@ export default function App() {
         };
 
         recognition.start();
-      } catch (err) {}
+      } catch (err) {
+        console.warn('Speech recognition could not start:', err);
+        setVoiceError('Speech recognition could not start. Use the skip button below.');
+        stopMicrophoneEngine();
+      }
     } else {
       setVoiceError('Speech Recognition is not supported on this browser.');
+      stopMicrophoneEngine();
     }
   };
 
-  // STEP 4: HIGH-SENSITIVITY MOTION TRACKER (Smooth 0-100% Dance Engine)
+  // STEP 4: STRICT FULL-BODY DANCE ENGINE (Full-screen Body + Knee/Leg Detection)
   const stopDanceEngine = () => {
     if (danceAnimRef.current) {
       cancelAnimationFrame(danceAnimRef.current);
       danceAnimRef.current = null;
     }
-    if (danceStream) {
-      danceStream.getTracks().forEach((t) => t.stop());
-      setDanceStream(null);
+    if (danceStreamRef.current) {
+      danceStreamRef.current.getTracks().forEach((track) => track.stop());
+      danceStreamRef.current = null;
     }
-    prevFrameDataRef.current = null;
+    if (danceVideoRef.current) {
+      danceVideoRef.current.srcObject = null;
+    }
+    if (danceAudioRef.current) {
+      danceAudioRef.current.pause();
+      danceAudioRef.current.currentTime = 0;
+    }
+    if (danceCanvasRef.current) {
+      const canvasContext = danceCanvasRef.current.getContext('2d');
+      canvasContext?.clearRect(0, 0, danceCanvasRef.current.width, danceCanvasRef.current.height);
+    }
+    previousFullBodyLandmarksRef.current = null;
+  };
+
+  const switchDanceSong = (newTrackId) => {
+    const matched = DANCE_PLAYLIST.find(t => t.id === newTrackId);
+    if (!matched) return;
+    setCurrentDanceTrackId(newTrackId);
+
+    if (danceAudioRef.current) {
+      danceAudioRef.current.pause();
+      danceAudioRef.current.currentTime = 0;
+    }
+    const nextAudio = new Audio(matched.src);
+    danceAudioRef.current = nextAudio;
+    nextAudio.loop = true;
+    nextAudio.volume = Math.max(0.65, volume / 100);
+    nextAudio.play().catch(() => {});
   };
 
   const startDanceMission = async () => {
     danceScoreRef.current = 0;
     setDanceProgress(0);
-    setDanceStatus('Starting Motion Camera...');
+    previousFullBodyLandmarksRef.current = null;
+
+    // AUTO-SHUFFLE: Har baar random new song chuna jayega
+    const randomSong = DANCE_PLAYLIST[Math.floor(Math.random() * DANCE_PLAYLIST.length)];
+    setCurrentDanceTrackId(randomSong.id);
+    setDanceStatus(`Playing: ${randomSong.name.split(' ')[1] || 'Bollywood Beat'}... Step Back!`);
+
+    if (danceAudioRef.current) {
+      danceAudioRef.current.pause();
+      danceAudioRef.current.currentTime = 0;
+    }
+    const danceAudio = new Audio(randomSong.src);
+    danceAudioRef.current = danceAudio;
+    danceAudio.loop = true;
+    danceAudio.volume = Math.max(0.65, volume / 100);
+    danceAudio.currentTime = 0;
+    danceAudio.play().catch((err) => {
+      console.warn('Dance music could not start:', err);
+      startMelodyLoop();
+    });
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: 320, height: 240 }
+        video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 360 } }
       });
-      setDanceStream(stream);
+      danceStreamRef.current = stream;
 
-      if (danceVideoRef.current) {
-        danceVideoRef.current.srcObject = stream;
-        danceVideoRef.current.setAttribute('playsinline', 'true');
-        danceVideoRef.current.muted = true;
-        await danceVideoRef.current.play();
-
-        const canvas = document.createElement('canvas');
-        canvas.width = 48;
-        canvas.height = 36;
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-        const trackMotion = () => {
-          const video = danceVideoRef.current;
-          if (!video || video.readyState < 2) {
-            danceAnimRef.current = requestAnimationFrame(trackMotion);
-            return;
-          }
-
-          ctx.drawImage(video, 0, 0, 48, 36);
-          const currentFrame = ctx.getImageData(0, 0, 48, 36).data;
-
-          if (prevFrameDataRef.current) {
-            let movementEnergy = 0;
-            // Sampling pixels for speed & responsive detection
-            for (let i = 0; i < currentFrame.length; i += 8) {
-              const diff = Math.abs(currentFrame[i] - prevFrameDataRef.current[i]) +
-                           Math.abs(currentFrame[i + 1] - prevFrameDataRef.current[i + 1]) +
-                           Math.abs(currentFrame[i + 2] - prevFrameDataRef.current[i + 2]);
-              if (diff > 35) movementEnergy++;
-            }
-
-            // Sensitive motion threshold: Hand wave ya body jump dono smoothly detect honge
-            if (movementEnergy > 15) {
-              danceScoreRef.current += 1.8;
-              setDanceStatus('🔥 Awesome! Keep Moving & Shaking!');
-            } else {
-              danceScoreRef.current = Math.max(0, danceScoreRef.current - 0.2);
-              setDanceStatus('💃 Keep moving your body / hands!');
-            }
-
-            const prog = Math.min(100, Math.round((danceScoreRef.current / 35) * 100));
-            setDanceProgress(prog);
-
-            if (prog >= 100) {
-              stopDanceEngine();
-              setDanceStatus('🎉 Mission Passed! Great energy!');
-              setTimeout(() => advancePipeline(), 250);
-              return;
-            }
-          }
-
-          prevFrameDataRef.current = currentFrame;
-          danceAnimRef.current = requestAnimationFrame(trackMotion);
-        };
-
-        danceAnimRef.current = requestAnimationFrame(trackMotion);
+      const video = danceVideoRef.current;
+      const canvas = danceCanvasRef.current;
+      const canvasContext = canvas?.getContext('2d');
+      if (!video || !canvas || !canvasContext) {
+        throw new Error('Could not initialize the dance video overlay.');
       }
+
+      video.srcObject = stream;
+      video.setAttribute('playsinline', 'true');
+      video.muted = true;
+      await video.play();
+
+      if (!poseLandmarkerRef.current) {
+        const filesetResolver = await FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+        );
+        poseLandmarkerRef.current = await PoseLandmarker.createFromOptions(filesetResolver, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+            delegate: 'CPU'
+          },
+          runningMode: 'VIDEO',
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.45,
+          minPosePresenceConfidence: 0.45,
+          minTrackingConfidence: 0.45
+        });
+      }
+
+      const connections = [
+        [11, 12],
+        [11, 13], [13, 15],
+        [12, 14], [14, 16],
+        [11, 23], [12, 24],
+        [23, 24],
+        [23, 25], [24, 26],
+        [25, 27], [26, 28]
+      ];
+      let lastSampleTime = 0;
+
+      const trackPose = (timestamp) => {
+        if (!video || video.readyState < 2 || !poseLandmarkerRef.current) {
+          danceAnimRef.current = requestAnimationFrame(trackPose);
+          return;
+        }
+
+        if (timestamp - lastSampleTime >= 85) {
+          lastSampleTime = timestamp;
+          const result = poseLandmarkerRef.current.detectForVideo(video, timestamp);
+          const landmarks = result?.landmarks?.[0];
+          canvasContext.clearRect(0, 0, canvas.width, canvas.height);
+
+          if (landmarks && landmarks.length > 0) {
+            const scale = Math.max(canvas.width / (video.videoWidth || 320), canvas.height / (video.videoHeight || 240));
+            const offsetX = ((video.videoWidth || 320) * scale - canvas.width) / 2;
+            const offsetY = ((video.videoHeight || 240) * scale - canvas.height) / 2;
+
+            const pointIsVisible = (index) => {
+              const pt = landmarks[index];
+              return pt && (pt.visibility ?? 1) >= 0.35;
+            };
+
+            const pointOnCanvas = (index) => {
+              const pt = landmarks[index];
+              return {
+                x: pt.x * (video.videoWidth || 320) * scale - offsetX,
+                y: pt.y * (video.videoHeight || 240) * scale - offsetY
+              };
+            };
+
+            // Neon Skeleton Overlay
+            canvasContext.lineWidth = 4;
+            canvasContext.lineCap = 'round';
+            canvasContext.strokeStyle = '#39ffcf';
+            canvasContext.shadowColor = '#00ffc8';
+            canvasContext.shadowBlur = 10;
+
+            for (const [start, end] of connections) {
+              if (!pointIsVisible(start) || !pointIsVisible(end)) continue;
+              const from = pointOnCanvas(start);
+              const to = pointOnCanvas(end);
+              canvasContext.beginPath();
+              canvasContext.moveTo(from.x, from.y);
+              canvasContext.lineTo(to.x, to.y);
+              canvasContext.stroke();
+            }
+            canvasContext.shadowBlur = 0;
+
+            // STRICT FULL BODY CHECK:
+            // 1. Shoulders: 11, 12
+            // 2. Wrists/Hands: 15, 16
+            // 3. Knees/Legs: 25, 26 (User must step back from bed!)
+            const shouldersVisible = pointIsVisible(11) && pointIsVisible(12);
+            const handsVisible = pointIsVisible(15) || pointIsVisible(16);
+            const legsVisible = pointIsVisible(25) || pointIsVisible(26) || pointIsVisible(23) || pointIsVisible(24);
+
+            if (!shouldersVisible || !legsVisible) {
+              setDanceStatus('⚠️ Step Back! Knees and shoulders must be visible!');
+              previousFullBodyLandmarksRef.current = null;
+            } else if (!handsVisible) {
+              setDanceStatus('🙌 Raise your arms and dance!');
+              previousFullBodyLandmarksRef.current = null;
+            } else {
+              // Full body in view! Track simultaneous hand AND leg/torso movement
+              const trackedJoints = [11, 12, 15, 16, 23, 24, 25, 26].filter(pointIsVisible);
+
+              const currentPoints = trackedJoints.map((idx) => ({
+                idx,
+                x: landmarks[idx].x,
+                y: landmarks[idx].y
+              }));
+
+              const previousPoints = previousFullBodyLandmarksRef.current;
+
+              if (previousPoints) {
+                const prevMap = new Map(previousPoints.map((p) => [p.idx, p]));
+                
+                // Separate Upper body (hands) & Lower body (hips/knees)
+                const handDeltas = currentPoints
+                  .filter(p => (p.idx === 15 || p.idx === 16) && prevMap.has(p.idx))
+                  .map(p => Math.hypot(p.x - prevMap.get(p.idx).x, p.y - prevMap.get(p.idx).y));
+
+                const lowerBodyDeltas = currentPoints
+                  .filter(p => (p.idx === 11 || p.idx === 12 || p.idx === 23 || p.idx === 24 || p.idx === 25 || p.idx === 26) && prevMap.has(p.idx))
+                  .map(p => Math.hypot(p.x - prevMap.get(p.idx).x, p.y - prevMap.get(p.idx).y));
+
+                const avgHandMotion = handDeltas.length ? handDeltas.reduce((a, b) => a + b, 0) / handDeltas.length : 0;
+                const avgLowerBodyMotion = lowerBodyDeltas.length ? lowerBodyDeltas.reduce((a, b) => a + b, 0) / lowerBodyDeltas.length : 0;
+
+                // ANTI-CHEAT RULE: Must have lower body/torso movement > 0.016 (sitting and waving hands alone won't work!)
+                if (avgLowerBodyMotion > 0.016 && avgHandMotion > 0.018) {
+                  danceScoreRef.current = Math.min(100, danceScoreRef.current + 1.8);
+                  setDanceStatus('🔥 Awesome Full Body Moves! Keep jumping!');
+                } else if (avgHandMotion > 0.02 && avgLowerBodyMotion <= 0.016) {
+                  setDanceStatus('❌ Move your legs/hips too! Don\'t just wave hands!');
+                  danceScoreRef.current = Math.max(0, danceScoreRef.current - 0.2);
+                } else {
+                  danceScoreRef.current = Math.max(0, danceScoreRef.current - 0.25);
+                  setDanceStatus('💃 Step & dance to the beat!');
+                }
+
+                const progress = Math.round(danceScoreRef.current);
+                setDanceProgress(progress);
+
+                if (danceScoreRef.current >= 100) {
+                  setDanceProgress(100);
+                  setDanceStatus('🎉 100% Passed! You are fully awake!');
+                  stopDanceEngine();
+                  advancePipeline();
+                  return;
+                }
+              }
+              previousFullBodyLandmarksRef.current = currentPoints;
+            }
+          } else {
+            previousFullBodyLandmarksRef.current = null;
+            setDanceStatus('Looking for body skeleton... Step back!');
+          }
+        }
+
+        danceAnimRef.current = requestAnimationFrame(trackPose);
+      };
+
+      danceAnimRef.current = requestAnimationFrame(trackPose);
     } catch (err) {
       console.warn("Dance camera error:", err);
-      setDanceStatus('Camera blocked! Allow camera.');
+      setDanceStatus('Camera blocked! Please allow camera access.');
     }
   };
 
@@ -813,7 +1000,11 @@ export default function App() {
       pipelineIndexRef.current = nextIdx;
       setPipelineIndex(nextIdx);
       const nextStep = currentPipe[nextIdx];
-      setTimeout(() => startStep(nextStep), 200);
+      if (nextStep === 'dance') {
+        startStep(nextStep);
+      } else {
+        setTimeout(() => startStep(nextStep), 200);
+      }
     } else {
       finalizeAlarmDismissal();
     }
@@ -821,7 +1012,7 @@ export default function App() {
 
   const triggerAlarmRing = (info, note = '') => {
     if (snoozeTimerRef.current) {
-      clearTimeout(snoozeTimerRef.current);
+      clearInterval(snoozeTimerRef.current);
       snoozeTimerRef.current = null;
       setSnoozeCountdown(null);
     }
@@ -853,7 +1044,7 @@ export default function App() {
     }
   };
 
-  // STRICT 1-MINUTE REAL COUNTDOWN SNOOZE
+  // STRICT 1-MINUTE REAL COUNTDOWN SNOOZE (Bulletproof Timestamp Execution)
   const handleStrictSnooze = () => {
     stopMelodyLoop();
     stopCamera();
@@ -861,18 +1052,20 @@ export default function App() {
     stopDanceEngine();
     setIsRinging(false);
 
-    let remainingSeconds = 60;
-    setSnoozeCountdown(remainingSeconds);
+    const ringTargetTime = Date.now() + 60 * 1000;
+    snoozeEndTimeRef.current = ringTargetTime;
+    setSnoozeCountdown(60);
 
     if (snoozeTimerRef.current) clearInterval(snoozeTimerRef.current);
 
     snoozeTimerRef.current = setInterval(() => {
-      remainingSeconds -= 1;
+      const remainingSeconds = Math.max(0, Math.ceil((snoozeEndTimeRef.current - Date.now()) / 1000));
       setSnoozeCountdown(remainingSeconds);
 
       if (remainingSeconds <= 0) {
         clearInterval(snoozeTimerRef.current);
         snoozeTimerRef.current = null;
+        snoozeEndTimeRef.current = null;
         setSnoozeCountdown(null);
         triggerAlarmRing('Snooze Over (1 Min Ended)', activeRingingNote || alarmNote);
       }
@@ -897,6 +1090,7 @@ export default function App() {
     if (snoozeTimerRef.current) {
       clearInterval(snoozeTimerRef.current);
       snoozeTimerRef.current = null;
+      snoozeEndTimeRef.current = null;
       setSnoozeCountdown(null);
     }
   };
@@ -959,7 +1153,7 @@ export default function App() {
     setNewAlarmCustomNote('');
   };
 
-  // Clock Monitor
+  // Real-time Clock Monitor (Exact minute trigger)
   useEffect(() => {
     const checkAlarmTime = () => {
       if (isRinging) return;
@@ -1050,9 +1244,9 @@ export default function App() {
 
   return (
     <div style={{
-      minHeight: '100dvh',
-      width: '100vw',
-      backgroundColor: '#120324',
+      minHeight: '100vh',
+      width: '100%',
+      backgroundColor: '#0a0214',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -1095,22 +1289,26 @@ export default function App() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '16px'
+          padding: 'max(10px, env(safe-area-inset-top)) 12px max(10px, env(safe-area-inset-bottom))'
         }}>
           <div style={{
+            boxSizing: 'border-box',
             width: '100%',
-            maxWidth: '360px',
+            maxWidth: '380px',
             backgroundColor: '#1b0633',
             border: '2px solid #ff1b90',
             borderRadius: '32px',
-            padding: '22px 20px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             boxShadow: '0 0 60px rgba(255, 27, 144, 0.8)',
             textAlign: 'center',
             color: '#fff',
-            position: 'relative'
+            position: 'relative',
+            maxHeight: 'calc(100dvh - 24px)',
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            padding: 'clamp(14px, 4vw, 22px) clamp(14px, 4vw, 20px)'
           }}>
             {activePipeline.length > 0 && (
               <div style={{ display: 'flex', gap: '8px', width: '100%', justifyContent: 'center', marginBottom: '12px' }}>
@@ -1363,21 +1561,76 @@ export default function App() {
                 >
                   <Mic size={18} /> {isListening ? 'Listening... Speak Now!' : 'Tap Mic & Read Phrase'}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    manualStopRef.current = true;
+                    advancePipeline();
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '13px',
+                    borderRadius: '14px',
+                    border: '2px solid #ffd166',
+                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: 900,
+                    cursor: 'pointer',
+                    boxShadow: '0 8px 20px rgba(245,158,11,0.4)'
+                  }}
+                >
+                  Skip / Force Complete Phrase
+                </button>
               </div>
             )}
 
-            {/* STEP 4: DANCE / HIGH-SENSITIVITY MOTION SHAKE */}
+            {/* STEP 4: STRICT FULL-BODY DANCE MISSION WITH ON-SCREEN SONG SELECTOR */}
             {currentActiveStepName === 'dance' && (
-              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '6px' }}>
-                <h3 style={{ fontSize: '19px', fontWeight: 900, margin: 0 }}>💃 Morning Dance Mission</h3>
-                <p style={{ fontSize: '11px', color: '#c7a9e9', margin: 0 }}>
-                  Step back & dance or wave your hands actively!
-                </p>
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 900, margin: 0 }}>💃 Morning Dance Mission</h3>
+                
+                {/* ON-SCREEN SONG SELECTOR & SHUFFLE CHANGER */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#270e44',
+                  border: '1px solid #ff1b90',
+                  borderRadius: '12px',
+                  padding: '4px 8px',
+                  width: '100%',
+                  boxSizing: 'border-box'
+                }}>
+                  <Music size={14} color="#ff1b90" style={{ flexShrink: 0 }} />
+                  <select
+                    value={currentDanceTrackId}
+                    onChange={(e) => switchDanceSong(e.target.value)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ffd0eb',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      width: '100%',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {DANCE_PLAYLIST.map((trk) => (
+                      <option key={trk.id} value={trk.id} style={{ backgroundColor: '#1b0633', color: '#fff' }}>
+                        {trk.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
                 <div style={{
                   position: 'relative',
-                  width: '180px',
-                  height: '180px',
+                  width: 'min(100%, 270px)',
+                  aspectRatio: '3 / 4',
+                  maxHeight: '40svh',
                   borderRadius: '24px',
                   overflow: 'hidden',
                   border: danceProgress > 70 ? '3px solid #10b981' : '3px solid #ff1b90',
@@ -1389,7 +1642,28 @@ export default function App() {
                     autoPlay
                     playsInline
                     muted
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      transform: 'scaleX(-1)'
+                    }}
+                  />
+                  <canvas
+                    ref={danceCanvasRef}
+                    width={360}
+                    height={480}
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      width: '100%',
+                      height: '100%',
+                      pointerEvents: 'none',
+                      transform: 'scaleX(-1)'
+                    }}
                   />
 
                   <div style={{
@@ -1586,7 +1860,7 @@ export default function App() {
             }}>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 800 }}>💃 4. Morning Dance (10s)</div>
-                <div style={{ fontSize: '10px', color: '#8d72b2' }}>Step back & shake/dance</div>
+                <div style={{ fontSize: '10px', color: '#8d72b2' }}>Full body movement & auto song</div>
               </div>
               <input
                 type="checkbox"
@@ -1902,23 +2176,28 @@ export default function App() {
         </div>
       )}
 
-      {/* ==================== EDGE-TO-EDGE RESPONSIVE CONTAINER ==================== */}
+      {/* ==================== RESPONSIVE PHONE FRAME ==================== */}
       <div style={{
         width: '100%',
-        maxWidth: '430px',
-        minHeight: '100dvh',
+        maxWidth: '380px',
+        height: '100vh',
+        maxHeight: '840px',
         backgroundColor: '#120324',
-        padding: '24px 20px 20px 20px',
+        border: '2px solid rgba(255, 27, 144, 0.2)',
+        borderRadius: '36px',
+        boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7)',
+        padding: '24px 20px 16px 20px',
         color: '#ffffff',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
         position: 'relative',
+        overflow: 'hidden',
         boxSizing: 'border-box'
       }}>
         {/* TAB 1: SLEEP TIME */}
         {activeTab === 'sleep' && (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', flex: 1, position: 'relative', zIndex: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, justifyContent: 'space-between', flex: 1, overflowY: 'auto', position: 'relative', zIndex: 2 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: '3px', opacity: 0.75 }}>
                 <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
@@ -2221,7 +2500,7 @@ export default function App() {
 
         {/* TAB 2: ALARMS LIST */}
         {activeTab === 'alarms' && (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', flex: 1, position: 'relative', zIndex: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, justifyContent: 'space-between', flex: 1, overflowY: 'auto', position: 'relative', zIndex: 2 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: '3px', opacity: 0.75 }}>
                 <span style={{ width: '2.5px', height: '16px', backgroundColor: '#a58ec4', borderRadius: '4px', transform: 'skewX(-15deg)' }} />
@@ -2261,7 +2540,7 @@ export default function App() {
                 }}>
                   <div style={{ position: 'absolute', top: '16px', left: '20px', width: '18px', height: '18px', borderRadius: '50%', backgroundColor: 'rgba(217, 70, 239, 0.3)' }} />
                   <div style={{ position: 'absolute', bottom: '16px', right: '22px', width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(217, 70, 239, 0.25)' }} />
-                  <div style={{ position: 'absolute', top: '-15px', left: '-15px', width: '90px', height: '90px', borderRadius: '50%', backgroundColor: '#120324' }} />
+                  <div style={{ position: 'absolute', top: '-15px', left: '-15px', width: '90px', height: '90px', borderRadius: '#120324' }} />
                 </div>
               </div>
 
@@ -2334,7 +2613,8 @@ export default function App() {
           borderTop: '1px solid #2b124a',
           marginTop: '12px',
           position: 'relative',
-          zIndex: 5
+          zIndex: 5,
+          flexShrink: 0
         }}>
           <button
             onClick={() => setActiveTab('sleep')}
